@@ -157,7 +157,7 @@ export const admin = new Hono<Env>()
     })),
     async (c) => {
       const me = actorOf(c);
-      await requireInstanceAdmin(me.id);
+      const myRole = await requireInstanceAdmin(me.id);
       const targetId = c.req.param("id");
       const { role, active } = c.req.valid("json");
 
@@ -169,6 +169,20 @@ export const admin = new Hono<Env>()
 
       const [target] = await db.select().from(user).where(eq(user.id, targetId)).limit(1);
       if (!target) return c.json({ message: "No such person" }, 404);
+
+      /*
+       * Ownership is only handed out by an owner, in both directions.
+       *
+       * Without this an admin promotes a second account they control to owner,
+       * and from there changes who may join and demotes the real owner — the
+       * invite route already guards exactly this, and this route missed it.
+       */
+      if (role === "owner" && myRole !== "owner") {
+        return c.json({ message: "Only an owner can make someone an owner" }, 403);
+      }
+      if (target.role === "owner" && myRole !== "owner") {
+        return c.json({ message: "Only an owner can change another owner" }, 403);
+      }
 
       const losingAnOwner =
         target.role === "owner" && ((role && role !== "owner") || active === false);

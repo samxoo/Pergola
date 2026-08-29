@@ -8,6 +8,11 @@ export type Subscriber = {
   /** Last sequence this subscriber has been sent. Its sync cursor. */
   cursor: number;
   send: (frame: ServerFrame) => void;
+  /** Who is listening, so access can be re-checked while the socket is open. */
+  userId: string;
+  /** Re-checked before every push. See flush(). */
+  stillAllowed: (userId: string, boardId: string) => Promise<boolean>;
+  close: () => void;
 };
 
 /** boardId -> everyone on this replica watching it. */
@@ -34,6 +39,20 @@ export function leave(sub: Subscriber): void {
  * "catch up" mode to get wrong.
  */
 export async function flush(sub: Subscriber): Promise<void> {
+  /*
+   * Membership is re-checked on every push, not only when the socket subscribed.
+   *
+   * A socket lives as long as the browser tab. Without this, removing someone
+   * from a board — or deactivating their account outright — leaves their open
+   * connection streaming every change on it until they happen to close the tab.
+   */
+  if (!(await sub.stillAllowed(sub.userId, sub.boardId))) {
+    sub.send({ type: "error", message: "You no longer have access to that board" });
+    leave(sub);
+    sub.close();
+    return;
+  }
+
   const pending = await since(sub.boardId, sub.cursor);
   if (pending.length === 0) return;
   sub.cursor = pending[pending.length - 1]!.seq;

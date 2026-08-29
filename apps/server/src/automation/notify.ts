@@ -1,7 +1,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import type { MutationRecord } from "@pergola/shared";
 import { db } from "../db/index.js";
-import { card, notification, user, watch } from "../db/schema.js";
+import { boardMember, card, notification, user, watch } from "../db/schema.js";
 
 /**
  * In-app notifications.
@@ -47,11 +47,22 @@ async function push(
   await db.insert(notification).values(unique.map((userId) => ({ userId, ...row })));
 }
 
-/** Resolve @names to accounts. Unknown handles are just text. */
-async function resolveMentions(body: string): Promise<string[]> {
+/**
+ * Resolve @names to accounts on THIS board.
+ *
+ * Scoped to the board's membership, not the instance. Matching against every
+ * account meant "@alice" on a private board notified any Alice anywhere, handing
+ * a stranger the card's title — and doubling as a way to test whether a given
+ * name or address has an account here.
+ */
+async function resolveMentions(body: string, boardId: string): Promise<string[]> {
   const handles = [...body.matchAll(MENTION)].map((m) => m[1]!.toLowerCase());
   if (handles.length === 0) return [];
-  const people = await db.select({ id: user.id, name: user.name, email: user.email }).from(user);
+  const people = await db
+    .select({ id: user.id, name: user.name, email: user.email })
+    .from(user)
+    .innerJoin(boardMember, eq(boardMember.userId, user.id))
+    .where(eq(boardMember.boardId, boardId));
   return people
     .filter((p) => {
       const local = p.email.split("@")[0]?.toLowerCase() ?? "";
@@ -86,7 +97,7 @@ export async function notifyFor(record: MutationRecord): Promise<void> {
   if (b.kind === "comment.create") {
     if (actor) await subscribe(actor, b.cardId);
     const title = await titleOf(b.cardId);
-    const mentioned = await resolveMentions(b.body);
+    const mentioned = await resolveMentions(b.body, record.boardId);
 
     if (mentioned.length > 0) {
       await push(mentioned, {

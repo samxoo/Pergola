@@ -43,6 +43,19 @@ const STARTER_LABELS = ["green", "yellow", "orange", "red", "purple", "blue"];
 export const boards = new Hono<Env>()
   .use("*", requireUser)
 
+  /*
+   * Reject a malformed board id before it reaches Postgres.
+   *
+   * Otherwise every route taking :id turns a typo into a 500 and a stack trace,
+   * which buries the real faults among the noise.
+   */
+  .use("/boards/:id/*", async (c, next) => {
+    if (!z.uuid().safeParse(c.req.param("id")).success) {
+      return c.json({ message: "Not a board id" }, 400);
+    }
+    await next();
+  })
+
   /** Only boards this person belongs to. There is no "all boards" view. */
   .get("/boards", async (c) => {
     const rows = await db
@@ -408,6 +421,23 @@ export const boards = new Hono<Env>()
       const { userId, role: newRole } = c.req.valid("json");
       const [exists] = await db.select({ id: user.id }).from(user).where(eq(user.id, userId)).limit(1);
       if (!exists) return c.json({ message: "No such person" }, 404);
+
+      /*
+       * The same last-admin rule the removal route enforces.
+       *
+       * This route can also demote, and an admin demoting themselves leaves a
+       * board nobody can administer: no invites, no rules, no structural edits,
+       * and no way back.
+       */
+      if (newRole !== "admin") {
+        const admins = await db
+          .select({ userId: boardMember.userId })
+          .from(boardMember)
+          .where(and(eq(boardMember.boardId, boardId), eq(boardMember.role, "admin")));
+        if (admins.length === 1 && admins[0]?.userId === userId) {
+          return c.json({ message: "A board needs at least one admin" }, 409);
+        }
+      }
 
       await db
         .insert(boardMember)

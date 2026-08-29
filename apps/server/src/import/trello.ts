@@ -76,11 +76,12 @@ const TrelloAction = z.object({
 
 export const TrelloExport = z.object({
   name: z.string().default("Imported board"),
-  labels: z.array(TrelloLabel).default([]),
-  lists: z.array(TrelloList).default([]),
-  cards: z.array(TrelloCard).default([]),
-  checklists: z.array(TrelloChecklist).default([]),
-  actions: z.array(TrelloAction).default([]),
+  // Bounded, so a crafted export cannot be used to exhaust the instance.
+  labels: z.array(TrelloLabel).max(200).default([]),
+  lists: z.array(TrelloList).max(500).default([]),
+  cards: z.array(TrelloCard).max(50_000).default([]),
+  checklists: z.array(TrelloChecklist).max(20_000).default([]),
+  actions: z.array(TrelloAction).max(100_000).default([]),
 });
 export type TrelloExport = z.infer<typeof TrelloExport>;
 

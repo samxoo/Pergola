@@ -82,7 +82,15 @@ export const integrations = new Hono<Env>()
 
   .get("/boards/:id/webhooks", async (c) => {
     const boardId = c.req.param("id");
-    await authorizeRead(boardId, actorOf(c));
+    /*
+     * Admin, not read.
+     *
+     * A Slack, Discord or Zapier hook carries its secret in the URL path, so the
+     * URL is itself a credential. Listing it to an observer — someone invited
+     * precisely because they may only read — hands them the ability to post into
+     * the team's channel from outside this application entirely.
+     */
+    await requireAdmin(boardId, actorOf(c));
     const rows = await db
       .select({
         id: webhook.id,

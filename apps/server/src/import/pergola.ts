@@ -39,7 +39,9 @@ export const PergolaExport = z.object({
   format: z.literal(FORMAT),
   exportedAt: z.string(),
   board: z.object({ title: z.string().min(1).max(200) }),
-  labels: z.array(z.object({ id: Id, name: z.string(), color: z.string(), position: z.string() })),
+  labels: z
+    .array(z.object({ id: Id, name: z.string(), color: z.string(), position: z.string() }))
+    .max(200),
   fields: z.array(
     z.object({
       id: Id,
@@ -48,7 +50,7 @@ export const PergolaExport = z.object({
       options: z.array(z.string()),
       position: z.string(),
     }),
-  ),
+  ).max(200),
   lists: z.array(
     z.object({
       id: Id,
@@ -73,7 +75,9 @@ export const PergolaExport = z.object({
       fields: z.record(Id, z.string()),
     }),
   ),
-  checklists: z.array(z.object({ id: Id, cardId: Id, title: z.string(), position: z.string() })),
+  checklists: z
+    .array(z.object({ id: Id, cardId: Id, title: z.string(), position: z.string() }))
+    .max(20_000),
   items: z.array(
     z.object({
       id: Id,
@@ -83,9 +87,21 @@ export const PergolaExport = z.object({
       position: z.string(),
     }),
   ),
-  attachments: z.array(
-    z.object({ id: Id, cardId: Id, url: z.string(), name: z.string() }),
-  ),
+  attachments: z
+    .array(
+      z.object({
+        id: Id,
+        cardId: Id,
+        // The same check the mutation path applies. An imported file is no more
+        // trusted than a typed one, and this ends up in an href.
+        url: z
+          .string()
+          .max(2000)
+          .refine((u) => /^https?:\/\//i.test(u), "Only http and https links can be attached"),
+        name: z.string(),
+      }),
+    )
+    .max(20_000),
   comments: z.array(
     z.object({
       id: Id,

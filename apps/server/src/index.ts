@@ -1,6 +1,7 @@
 import { serve, upgradeWebSocket } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { logger } from "hono/logger";
 import { WebSocketServer } from "ws";
 import type { ClientFrame, ServerFrame } from "@pergola/shared";
@@ -12,8 +13,8 @@ import { env, warnIfDegraded } from "./env.js";
 import { busStatus, flush, join, leave, startBus, type Subscriber } from "./realtime/bus.js";
 import { eq } from "drizzle-orm";
 import { db } from "./db/index.js";
-import { user } from "./db/schema.js";
-import { mayJoin } from "./auth/instance.js";
+import { invite, user } from "./db/schema.js";
+import { hashInvite, mayJoin } from "./auth/instance.js";
 import { admin } from "./routes/admin.js";
 import { boards } from "./routes/boards.js";
 import { files } from "./routes/files.js";
@@ -41,6 +42,15 @@ app.onError((err, c) => {
   return c.json({ message: "Something went wrong on the server" }, 500);
 });
 
+/*
+ * A ceiling on request bodies.
+ *
+ * Without one, an import is parsed into memory and then held in a single long
+ * transaction against a ten-connection pool — a few of those at once and the
+ * instance stops serving anybody. The file route enforces its own smaller limit.
+ */
+app.use("/api/*", bodyLimit({ maxSize: 25 * 1024 * 1024 }));
+
 app.get("/health", (c) => {
   const bus = busStatus();
   // A container that is up but not receiving notifications should fail its
@@ -59,35 +69,53 @@ app.get("/health", (c) => {
 /*
  * Who may create an account.
  *
- * Checked here rather than inside Better Auth so the rule is visible in the
- * routing, and so it applies to every sign-up path at once. Without it, anyone
- * who can reach the URL has an account — which is exactly what a company
- * running this on the internet does not want.
+ * Checked inside the wildcard rather than as its own route. An exact-path route
+ * in front of a wildcard is not a gate: Hono matches paths strictly, so
+ * "/api/auth/sign-up/email/" skips the exact route and falls through to the
+ * handler behind it. Normalising here means no spelling of the path can get
+ * past the check, and it stays true for whatever route is added next.
  */
-app.post("/api/auth/sign-up/email", async (c, next) => {
-  let email = "";
-  let token: string | undefined;
-  try {
-    const body = (await c.req.raw.clone().json()) as { email?: string; inviteToken?: string };
-    email = String(body.email ?? "");
-    token = body.inviteToken;
-  } catch {
-    return c.json({ message: "That sign-up could not be read" }, 400);
+app.on(["GET", "POST"], "/api/auth/*", async (c) => {
+  const path = new URL(c.req.url).pathname.replace(/\/+$/, "");
+
+  if (c.req.method === "POST" && path === "/api/auth/sign-up/email") {
+    let email = "";
+    let token: string | undefined;
+    try {
+      const body = (await c.req.raw.clone().json()) as { email?: string; inviteToken?: string };
+      email = String(body.email ?? "");
+      token = body.inviteToken;
+    } catch {
+      return c.json({ message: "That sign-up could not be read" }, 400);
+    }
+
+    const verdict = await mayJoin(email, token);
+    if (!verdict.ok) return c.json({ message: verdict.message }, 403);
+
+    const res = await auth.handler(c.req.raw);
+
+    if (res.ok) {
+      await db.transaction(async (tx) => {
+        // The first account to exist owns the instance; otherwise a fresh box is
+        // a locked room with the key inside.
+        if (verdict.role !== "member") {
+          await tx.update(user).set({ role: verdict.role }).where(eq(user.email, email.toLowerCase()));
+        }
+        // An invitation redeemed through the ordinary form must still be spent,
+        // or it stays valid until it expires and its role is silently dropped.
+        if (token) {
+          await tx
+            .update(invite)
+            .set({ acceptedAt: new Date() })
+            .where(eq(invite.tokenHash, hashInvite(token)));
+        }
+      });
+    }
+    return res;
   }
 
-  const verdict = await mayJoin(email, token);
-  if (!verdict.ok) return c.json({ message: verdict.message }, 403);
-
-  await next();
-  // The first account to exist owns the instance; otherwise a fresh box is a
-  // locked room with the key inside.
-  if (verdict.role === "owner") {
-    await db.update(user).set({ role: "owner" }).where(eq(user.email, email.toLowerCase()));
-  }
+  return auth.handler(c.req.raw);
 });
-
-// Better Auth owns sign-up, sign-in, sessions and cookies under this prefix.
-app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 // Mounted before the authenticated API so it never inherits its middleware.
 app.route("/api/public", publicBoards);
@@ -137,6 +165,18 @@ app.get(
           boardId: frame.boardId,
           cursor: frame.since,
           send: (f) => send(ws, f),
+          userId: session.user.id,
+          // Both halves of revocation: taken off the board, or deactivated.
+          stillAllowed: async (userId, boardId) => {
+            const [live] = await db
+              .select({ deactivatedAt: user.deactivatedAt })
+              .from(user)
+              .where(eq(user.id, userId))
+              .limit(1);
+            if (!live || live.deactivatedAt) return false;
+            return (await roleOn(boardId, userId)) !== null;
+          },
+          close: () => ws.close(),
         };
         join(sub);
         send(ws, { type: "hello", boardId: frame.boardId, seq: frame.since });

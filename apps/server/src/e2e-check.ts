@@ -758,6 +758,63 @@ async function main() {
     "and removing one can be undone",
   );
 
+  /* ------------------------------------------------ authorization edges -- */
+  section("Authorization edges");
+
+  // A card must not be parkable on another board's list. Public boards hand out
+  // list ids to anyone, so these are reachable without membership.
+  const other = (await (await sam.post("/api/boards", { title: "Sam's board" })).json()) as {
+    id: string;
+  };
+  const otherState = await sam.json<BoardState>(`/api/boards/${other.id}`);
+  const foreignList = otherState.lists[0]!.id;
+
+  const crossCreate = await dana.tryMutate(board.id, {
+    kind: "card.create",
+    cardId: randomUUID(),
+    listId: foreignList,
+    title: "Parked on someone else's board",
+    position: atEnd(null),
+  });
+  check(crossCreate.status === 409, "a card cannot be created on another board's list");
+
+  const crossMove = await dana.tryMutate(board.id, {
+    kind: "card.move",
+    cardId,
+    toListId: foreignList,
+    position: atEnd(null),
+  });
+  check(crossMove.status === 409, "nor moved onto one");
+
+  // Assigning a stranger would send them the card's title by notification.
+  const outsider = await signIn(`outsider+${Date.now()}@example.com`, "Outsider", adminCookie);
+  const outsiderId = (await outsider.json<{ user?: { id: string } }>("/api/auth/get-session"))
+    ?.user?.id;
+  const assignStranger = await dana.tryMutate(board.id, {
+    kind: "card.assign",
+    cardId,
+    userId: outsiderId!,
+    on: true,
+  });
+  check(assignStranger.status === 409, "someone not on the board cannot be assigned to its cards");
+
+  const strangerNotes = await outsider.json<unknown[]>("/api/notifications");
+  check(strangerNotes.length === 0, "so no card title reaches them by notification");
+
+  // A webhook URL usually carries its own secret in the path.
+  const observerHooks = await sam.get(`/api/boards/${board.id}/webhooks`);
+  check(observerHooks.status === 403, "an observer cannot read this board's webhook URLs");
+
+  // A board must never be left with nobody able to administer it.
+  const selfDemote2 = await dana.post(`/api/boards/${board.id}/members`, {
+    userId: (await dana.json<{ user?: { id: string } }>("/api/auth/get-session"))?.user?.id,
+    role: "observer",
+  });
+  check(selfDemote2.status === 409, "and its last admin cannot demote themselves");
+
+  const badId = await dana.get("/api/boards/not-a-uuid/rules");
+  check(badId.status === 400, "a malformed board id is a 400, not a server error");
+
   /* ------------------------------------------------- export round-trip -- */
   section("Taking your data with you");
   await dana.mutate(board.id, { kind: "card.vote", cardId, on: true });
@@ -886,6 +943,28 @@ async function main() {
   const memberSeesAdmin = await sam.get("/api/admin/people");
   check(memberSeesAdmin.status === 403, "and an ordinary member cannot see who else is here");
 
+  // The gate is a path check, so every spelling of the path must hit it. An
+  // exact route in front of a wildcard is not a gate: a trailing slash skips it.
+  for (const path of [
+    "/api/auth/sign-up/email/",
+    "/api/auth/sign-up/email//",
+    "/api/auth/sign-up/email/.",
+  ]) {
+    const res = await fetch(BASE + path, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: BASE },
+      body: JSON.stringify({
+        email: `slash+${Date.now()}@nowhere.test`,
+        password: "correct-horse-battery-staple",
+        name: "Slash",
+      }),
+    });
+    check(res.status === 403, `and cannot slip past the gate via ${path}`);
+  }
+
+  // An admin must not be able to hand themselves, or an accomplice, ownership.
+
+
   /* ------------------------------------------------------------- invites -- */
   const invited = `hire+${Date.now()}@example.com`;
   const inviteRes = await fetch(`${BASE}/api/admin/invites`, {
@@ -928,9 +1007,9 @@ async function main() {
   check(reuse.status === 404, "and the link is spent — it cannot be used twice");
 
   /* -------------------------------------------------------- deactivation -- */
-  const people = await (
+  const people = (await (
     await fetch(`${BASE}/api/admin/people`, { headers: { cookie: adminCookie } })
-  ).json() as { id: string; email: string; role: string; active: boolean }[];
+  ).json()) as { id: string; email: string; role: string; active: boolean }[];
   const hire = people.find((p) => p.email === invited)!;
   check(hire.role === "member" && hire.active, "they show up in the directory as an active member");
 

@@ -66,6 +66,12 @@ export async function deliver(record: MutationRecord): Promise<void> {
           },
           body,
           signal: controller.signal,
+          /*
+           * A checked address is worth nothing if the response can redirect the
+           * request somewhere else. undici follows up to twenty hops by default,
+           * and hop two is not checked by anybody.
+           */
+          redirect: "manual",
         });
         await db
           .update(webhook)

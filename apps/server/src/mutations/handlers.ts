@@ -4,6 +4,7 @@ import type { Tx } from "../db/index.js";
 import {
   attachment,
   board,
+  boardMember,
   card,
   cardAssignee,
   cardLabel,
@@ -88,6 +89,9 @@ export const handlers: Handlers = {
 
   /* --------------------------------------------------------------- cards */
   "card.create": async (tx, boardId, b) => {
+    // The list has to belong to this board. Without it a card can be parked on
+    // another board's list — public boards hand their list ids out to anyone.
+    await getList(tx, boardId, b.listId);
     // The board row is already locked by the seq bump in commit(), so this
     // second update never contends with anything new.
     const [row] = await tx
@@ -109,6 +113,7 @@ export const handlers: Handlers = {
 
   "card.move": async (tx, boardId, b) => {
     const prev = await getCard(tx, boardId, b.cardId);
+    await getList(tx, boardId, b.toListId);
     await tx
       .update(card)
       .set({ listId: b.toListId, position: b.position })
@@ -214,6 +219,15 @@ export const handlers: Handlers = {
   /* ----------------------------------------------------------- assignees */
   "card.assign": async (tx, boardId, b) => {
     await getCard(tx, boardId, b.cardId);
+    /*
+     * Only people on the board can be assigned to its cards.
+     *
+     * The user id arrives from the client and used to be taken on trust, which
+     * meant anyone could assign a stranger to a private card — and the
+     * notification that followed carried the card's title to someone who could
+     * not open the board, then kept doing so on every later change.
+     */
+    if (b.on) await requireMember(tx, boardId, b.userId);
     if (b.on) {
       await tx
         .insert(cardAssignee)
@@ -279,6 +293,7 @@ export const handlers: Handlers = {
 
   "item.setDue": async (tx, boardId, b) => {
     const prev = await getItem(tx, boardId, b.itemId);
+    if (b.assigneeId) await requireMember(tx, boardId, b.assigneeId);
     await tx
       .update(checklistItem)
       .set({ dueAt: date(b.dueAt), assigneeId: b.assigneeId })
@@ -467,6 +482,16 @@ export const handlers: Handlers = {
  * Every lookup is scoped to the board. A mutation that names a card on someone
  * else's board must fail here, not slip through to an UPDATE by primary key.
  */
+
+/** Someone must be on the board before they can be attached to its work. */
+async function requireMember(tx: Tx, boardId: string, userId: string) {
+  const [row] = await tx
+    .select({ userId: boardMember.userId })
+    .from(boardMember)
+    .where(and(eq(boardMember.boardId, boardId), eq(boardMember.userId, userId)))
+    .limit(1);
+  if (!row) throw new Stale("That person is not on this board, so they");
+}
 
 async function getList(tx: Tx, boardId: string, id: string) {
   const [row] = await tx
