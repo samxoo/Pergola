@@ -1,0 +1,21 @@
+{
+  "name": "pergola",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @pergola/shared --filter \"./apps/*\" dev",
+    "build": "pnpm --filter @pergola/shared build && pnpm --filter @pergola/web build && pnpm --filter @pergola/server build",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @pergola/server db:generate",
+    "db:migrate": "pnpm --filter @pergola/server db:migrate",
+    "db:seed": "pnpm --filter @pergola/server db:seed",
+    "prebuild": "true"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

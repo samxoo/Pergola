@@ -1,0 +1,112 @@
+/*
+ * Pergola — admin console.
+ *
+ * The instance is the company, so this is the only view that looks at the whole
+ * box at once. It borrows the settings drawer wholesale — `.setting-row`,
+ * `.badge`, `.chip.avatar`, `.viewtab` — and adds only what a company-wide list
+ * needs that a board-wide one does not: an off state, and a public-board flag.
+ *
+ * Everything is scoped under `.admin` so it cannot reach an element outside the
+ * drawer.
+ */
+
+/* ---- rows ---------------------------------------------------------------- */
+
+/* Name, a marker or two, on one line. The name is the part allowed to run out. */
+.admin .row-name {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+.admin .row-name strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin .row-name .muted { font-size: 11.5px; flex: none; }
+.admin .row-name .badge { flex: none; }
+.admin .invite .badge { text-transform: capitalize; }
+
+.admin .tally { font-size: 11.5px; }
+
+/* ---- switched off -------------------------------------------------------- */
+
+/*
+ * A deactivated person, or a dead invite. The identity fades; the controls and
+ * the pill stay at full strength, because the whole point of the row is that you
+ * can still read it and still act on it. Hence colour rather than an opacity on
+ * the row — opacity would take the pill down with it.
+ */
+.admin .is-off .row-name strong,
+.admin .is-off .setting-main .muted {
+  color: var(--muted);
+  opacity: 0.6;
+}
+.admin .is-off .chip.avatar { opacity: 0.4; }
+
+/* `.off` is rust everywhere else in the app (see `.status.off`); keep the word. */
+.admin .badge.off {
+  color: var(--rust);
+  border-color: var(--rust);
+  opacity: 1;
+}
+
+/* ---- public boards ------------------------------------------------------- */
+
+/*
+ * The one row an owner needs to spot from across the list: a board anybody with
+ * the link can read, with no account. The band bleeds into the drawer's own
+ * padding so the flag is visible before the title is.
+ */
+.admin .board.is-public {
+  border-left: 2px solid var(--rust);
+  padding: 11px;
+  margin: 0 -13px;
+  background: color-mix(in oklab, var(--rust) 6%, transparent);
+}
+.admin .badge.public { color: var(--rust); border-color: var(--rust); }
+
+.admin .admin-warn {
+  color: var(--rust);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0 0 10px;
+}
+
+/* ---- controls ------------------------------------------------------------ */
+
+/* Selects are styled per-context elsewhere; the console has two, so do it once. */
+.admin select {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.admin select:hover:not(:disabled) { border-color: var(--beam); }
+.admin select:focus-visible {
+  outline: 2px solid var(--beam);
+  outline-offset: -1px;
+  border-color: var(--beam);
+}
+.admin select:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Yourself: the controls are there, greyed, so the rule is visible not hidden. */
+.admin .linkish:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.admin .admin-field { margin-top: 4px; }
+.admin .admin-field select { font-size: 13.5px; padding: 7px 9px; }
+
+.admin .admin-actions { display: flex; gap: 9px; margin-top: 10px; }
+
+.admin .bad { color: var(--rust); font-size: 13px; }

@@ -1,0 +1,44 @@
+# The entire installation:
+#   docker compose -f docker/compose.yaml up -d   ->   http://localhost:3000
+#
+# To use Supabase, Neon or RDS instead, set DATABASE_URL in .env and start only
+# the app service. Read the note on DATABASE_DIRECT_URL in .env.example first —
+# a transaction-mode pooler silently breaks live updates.
+
+name: pergola
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pergola
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pergola}
+      POSTGRES_DB: pergola
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      # The app waits for this, so migrations never race an unready database.
+      test: ["CMD-SHELL", "pg_isready -U pergola -d pergola"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: ghcr.io/OWNER/pergola:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://pergola:${POSTGRES_PASSWORD:-pergola}@db:5432/pergola}
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "${PORT:-3000}:3000"
+
+volumes:
+  db:

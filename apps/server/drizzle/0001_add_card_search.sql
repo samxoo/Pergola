@@ -1,0 +1,2 @@
+ALTER TABLE "card" ADD COLUMN "search" "tsvector" GENERATED ALWAYS AS (setweight(to_tsvector('simple', coalesce(title, '')), 'A') || setweight(to_tsvector('simple', coalesce(desc_md, '')), 'B')) STORED;--> statement-breakpoint
+CREATE INDEX "card_search_idx" ON "card" USING gin ("search");

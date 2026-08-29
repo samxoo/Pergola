@@ -1,0 +1,222 @@
+/*
+ * Pergola — timeline.
+ *
+ * A Gantt that still reads as the board: same ground, same beam, no new
+ * vocabulary. Everything is scoped under `.timeline` so it cannot reach a
+ * single element outside this view.
+ *
+ * `--tl-day` and `--tl-days` are written inline by TimelineView; the values
+ * below are only what keeps the stylesheet legible on its own.
+ */
+
+.timeline {
+  --tl-day: 28px;
+  --tl-days: 42;
+  --tl-axis: 42px;
+  --tl-row: 30px;
+
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px 18px 18px;
+}
+
+/* ---- head ---------------------------------------------------------------- */
+
+.timeline .tl-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+
+.timeline .tl-range {
+  font-family: "Bricolage Grotesque", Geist, sans-serif;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.timeline .tl-empty { margin: 40px 0 0; text-align: center; }
+
+/* ---- canvas -------------------------------------------------------------- */
+
+.timeline .tl-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--ground);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+.timeline .tl-canvas {
+  position: relative;
+  width: calc(var(--tl-day) * var(--tl-days));
+  min-height: 100%;
+  padding-bottom: 12px;
+}
+
+/* One gradient for every day boundary; only the weekends need their own box. */
+.timeline .tl-stripes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--line-soft) 0 1px,
+    transparent 1px var(--tl-day)
+  );
+}
+.timeline .tl-stripes i { position: absolute; top: 0; bottom: 0; background: var(--surface-2); }
+
+/* Today sits on the boundary it opens, not in the middle of its column. */
+.timeline .tl-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--beam);
+}
+
+/* ---- axis ---------------------------------------------------------------- */
+
+.timeline .tl-axis {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: var(--tl-axis);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.timeline .tl-months { display: flex; height: 19px; }
+.timeline .tl-month {
+  flex: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding-left: 6px;
+  border-left: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 19px;
+  color: var(--muted);
+}
+.timeline .tl-month:first-child { border-left: 0; }
+
+.timeline .tl-days { display: flex; }
+.timeline .tl-daycol {
+  flex: none;
+  width: var(--tl-day);
+  padding-top: 2px;
+  text-align: center;
+  font-size: 9.5px;
+  line-height: 1.15;
+  color: var(--muted);
+}
+.timeline .tl-daycol[data-weekend] { background: var(--surface-2); }
+.timeline .tl-daycol[data-today] { color: var(--beam); font-weight: 700; }
+.timeline .tl-dom { display: block; font-size: 11px; }
+
+/* ---- groups -------------------------------------------------------------- */
+
+/* Each head sticks within its own group, so the list you are reading is named
+   for exactly as long as its rows are on screen. */
+.timeline .tl-grouphead {
+  position: sticky;
+  top: var(--tl-axis);
+  z-index: 2;
+  height: 24px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-soft);
+}
+.timeline .tl-grouphead span {
+  position: sticky;
+  left: 0;
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  line-height: 24px;
+  color: var(--muted);
+}
+
+/* Clips a marker's label at the far edge; the bar itself keeps its own overflow. */
+.timeline .tl-row { position: relative; height: var(--tl-row); overflow: hidden; }
+
+/* ---- bars ---------------------------------------------------------------- */
+
+.timeline .tl-bar {
+  position: absolute;
+  top: 4px;
+  height: calc(var(--tl-row) - 9px);
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 6px;
+  border: 1px solid color-mix(in oklab, var(--tl-hue) 45%, var(--line));
+  border-left: 3px solid var(--tl-hue);
+  border-radius: 3px;
+  /* A wash rather than a fill: the label palette is picked to stay off the ink,
+     and a row of saturated blocks is the one thing a Gantt must not be. */
+  background: color-mix(in oklab, var(--tl-hue) 18%, var(--surface));
+  color: var(--ink);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: grab;
+  user-select: none;
+  /* The pointer drag owns horizontal movement; without this a touch scrolls. */
+  touch-action: none;
+  transition: box-shadow 0.14s, transform 0.14s var(--spring);
+}
+.timeline .tl-bar:hover { box-shadow: var(--lift); }
+.timeline .tl-bar:focus-visible { outline: 2px solid var(--beam); outline-offset: 2px; }
+.timeline .tl-bar[data-dragging="true"] {
+  cursor: grabbing;
+  box-shadow: var(--drag);
+  transform: translateY(-1px);
+}
+
+.timeline .tl-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A card with one date is a moment, not a span, so its name goes beside it. */
+.timeline .tl-bar[data-marker] { padding: 0; }
+.timeline .tl-bar[data-marker] .tl-title {
+  position: absolute;
+  left: calc(100% + 6px);
+  max-width: 240px;
+}
+
+/* Squared off where the bar runs past the window — a spine there would claim a
+   start the card does not have. */
+.timeline .tl-bar[data-clip*="l"] {
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.timeline .tl-bar[data-clip*="r"] {
+  border-right: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* Entirely outside the window: a stub you can read but not drag. */
+.timeline .tl-bar[data-off] { opacity: 0.55; cursor: pointer; padding: 0; }
+.timeline .tl-bar[data-off] .tl-title { position: absolute; left: calc(100% + 6px); max-width: 240px; }
+.timeline .tl-bar[data-off="left"] { border-left: 0; }
+.timeline .tl-bar[data-off="right"] { border-right: 0; }
+.timeline .tl-bar[data-off="right"] .tl-title {
+  left: auto;
+  right: calc(100% + 6px);
+  text-align: right;
+}
+
+/* Six pixels either side, straddling the edge, which is the smallest zone a
+   mouse can find without the bar's own body losing its grab. */
+.timeline .tl-grip { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.timeline .tl-grip[data-grip="start"] { left: -3px; }
+.timeline .tl-grip[data-grip="end"] { right: -3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline .tl-bar { transition: none; }
+  .timeline .tl-bar[data-dragging="true"] { transform: none; }
+}

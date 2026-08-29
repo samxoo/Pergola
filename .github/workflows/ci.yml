@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pergola
+          POSTGRES_PASSWORD: pergola
+          POSTGRES_DB: pergola
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pergola" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://pergola:pergola@localhost:5432/pergola
+      BETTER_AUTH_SECRET: ci-only-secret-not-used-anywhere-real
+      BETTER_AUTH_URL: http://localhost:3000
+      # Left off deliberately: CI must exercise the SSRF guard as production has it.
+      WEBHOOK_ALLOW_PRIVATE: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pergola/shared build
+      - run: pnpm -r typecheck
+      - run: pnpm --filter @pergola/shared test
+      # Two things that fail at runtime rather than at build time if they rot:
+      # Better Auth's schema drifting from the Drizzle tables, and the storage
+      # driver's defence against a key that escapes its root.
+      - run: pnpm --filter @pergola/server exec tsx --test 'src/**/*.test.ts' 
+      - run: pnpm build
+
+      # The architecture's load-bearing claim — live sync, undo, idempotent
+      # replay, reconnect-by-cursor — is asserted on every commit, not assumed.
+      # 83 checks: live sync, undo, roles, search, import, automation, webhooks,
+      # tokens, notifications and public boards.
+      - name: prove the whole thing end to end
+        run: |
+          pnpm --filter @pergola/server db:migrate
+          node apps/server/dist/index.js &
+          npx wait-on http://localhost:3000/health -t 30000
+          pnpm --filter @pergola/server exec tsx src/e2e-check.ts

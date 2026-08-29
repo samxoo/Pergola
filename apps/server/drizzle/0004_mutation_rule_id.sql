@@ -1,0 +1,1 @@
+ALTER TABLE "mutation" ADD COLUMN "rule_id" uuid;
