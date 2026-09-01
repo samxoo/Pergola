@@ -29,11 +29,39 @@ export type Handlers = {
 
 let probe: Promise<Transport> | null = null;
 
+/**
+ * What this deployment last told us it was.
+ *
+ * The answer cannot change without a redeploy, and asking costs a round trip on
+ * the path between opening a board and seeing it go live. So remember it, use it
+ * immediately on the next visit, and re-ask in the background — a stale answer
+ * survives one load at worst, and both the refresh and the dead-socket fallback
+ * below correct it.
+ */
+const REMEMBERED = "pergola.transport";
+
+function remembered(): Transport | null {
+  try {
+    const saved = localStorage.getItem(REMEMBERED);
+    return saved === "ws" || saved === "sse" ? saved : null;
+  } catch {
+    return null; // Private mode or blocked storage: just ask.
+  }
+}
+
 /** Ask the server what it is. Cached for the page: it cannot change under us. */
 function preferred(): Promise<Transport> {
   probe ??= fetch("/api/health")
     .then((r) => (r.ok ? (r.json() as Promise<{ runtime?: string }>) : null))
-    .then((body) => (body?.runtime === "serverless" ? "sse" : "ws"))
+    .then((body) => {
+      const kind: Transport = body?.runtime === "serverless" ? "sse" : "ws";
+      try {
+        localStorage.setItem(REMEMBERED, kind);
+      } catch {
+        // Not persisting only costs the next load one round trip.
+      }
+      return kind;
+    })
     // An unreachable health endpoint says nothing about transports. Assume the
     // self-hosted shape, which the fallback below corrects if it is wrong.
     .catch(() => "ws" as Transport);
@@ -120,7 +148,12 @@ export function connect(boardId: string, h: Handlers): { close: () => void } {
 
   const start = async () => {
     if (closed) return;
-    const kind = ruledOut === "ws" ? "sse" : await preferred();
+
+    // Connect on what we already know, and only wait when we know nothing.
+    const known = ruledOut === "ws" ? "sse" : remembered();
+    if (known) void preferred(); // refresh for next time, off the critical path
+    const kind = known ?? (await preferred());
+
     if (closed) return;
     dispose = kind === "sse" ? openStream() : openSocket();
   };
