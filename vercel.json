@@ -11,7 +11,8 @@
     }
   },
   "rewrites": [
-    { "source": "/health", "destination": "/api/health" },
+    { "source": "/health", "destination": "/api/route?__path=health" },
+    { "source": "/api/(.*)", "destination": "/api/route?__path=$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

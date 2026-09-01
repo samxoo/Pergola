@@ -9,10 +9,12 @@ export { default } from "../apps/server/dist/vercel.js";
  * bound, no WebSocket is upgraded, and no migration runs at boot (the build
  * does that once instead of every cold start).
  *
- * The filename is a catch-all — `[...route]` — because that is what Vercel's
- * file-system routing understands in an `api/` directory. The doubled
- * `[[...route]]` form is a Next.js convention, and a project that is not Next
- * ends up with a function that only shallow paths reach.
+ * One plain filename, and vercel.json rewrites every /api path to it. Not a
+ * catch-all: file-system routing in a bare `api/` directory matches a single
+ * segment and nothing deeper, so `[...route].ts` served /api/boards and left
+ * /api/auth/sign-in/email answering 404 from the edge — measured, after both
+ * bracket spellings behaved the same way. The rewrite carries the real path in
+ * `__path`, which src/vercel.ts puts back before Hono ever sees the request.
  *
  * It re-exports the compiled output rather than importing source, so the
  * function bundler only ever traces plain JavaScript and resolves every

@@ -30,6 +30,8 @@ export default async function handler(
    * anything deriving a link, a callback or a cookie's Secure flag from the
    * request should see the scheme the client actually used.
    */
+  restorePath(incoming);
+
   const forwarded = header(incoming, "x-forwarded-proto");
   const scheme = forwarded === "http" || forwarded === "https" ? forwarded : "https";
   const host = header(incoming, "x-forwarded-host") ?? incoming.headers.host;
@@ -37,6 +39,30 @@ export default async function handler(
     incoming.url = `${scheme}://${host}${incoming.url}`;
   }
   await listener(incoming, outgoing);
+}
+
+/**
+ * Put the requested path back.
+ *
+ * File-system routing in a bare `api/` directory matches one segment and no
+ * more, so /api/boards reached this function and /api/auth/sign-in/email did
+ * not — it 404ed at the edge, before any of our code ran. vercel.json therefore
+ * rewrites every /api path to this one function and carries the original in a
+ * `__path` query parameter, which is undone here so that Hono routes on the URL
+ * the client actually asked for and knows nothing about any of this.
+ *
+ * Anything else in the query string is the caller's and is preserved.
+ */
+function restorePath(incoming: IncomingMessage): void {
+  if (!incoming.url?.startsWith("/")) return;
+  const url = new URL(incoming.url, "http://rewrite.invalid");
+  const original = url.searchParams.get("__path");
+  if (original === null) return;
+
+  url.searchParams.delete("__path");
+  const query = url.searchParams.toString();
+  const path = original.startsWith("/") ? original : `/${original}`;
+  incoming.url = `/api${path === "/" ? "" : path}${query ? `?${query}` : ""}`;
 }
 
 /** A header may arrive repeated, or as a comma-joined list. Take the first. */
