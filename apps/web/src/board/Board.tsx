@@ -14,6 +14,7 @@ import { useDialogs } from "../lib/Dialogs.js";
 import { hexFor, avatarColor, initials } from "../lib/labels.js";
 import { matches, type Filter } from "../lib/filters.js";
 import { useT, usePlural } from "../lib/i18n.js";
+import { uploadToCard } from "../lib/upload.js";
 import { Column } from "./Column.js";
 
 export type GroupBy = "none" | "label" | "assignee";
@@ -23,6 +24,8 @@ type Props = {
   filter: Filter;
   groupBy: GroupBy;
   apply: (body: MutationBody) => void;
+  /** Reload the board — an upload is written by the server, not by a mutation. */
+  refresh: () => Promise<void>;
   onOpenCard: (id: string) => void;
 };
 
@@ -52,7 +55,7 @@ const splitCell = (id: string) => {
   return { laneKey, listId };
 };
 
-export function Board({ state, filter, groupBy, apply, onOpenCard }: Props) {
+export function Board({ state, filter, groupBy, apply, refresh, onOpenCard }: Props) {
   const t = useT();
   const pl = usePlural();
   const { ask, confirm } = useDialogs();
@@ -287,15 +290,22 @@ export function Board({ state, filter, groupBy, apply, onOpenCard }: Props) {
                       onShowMore={() =>
                         setRevealed((r) => ({ ...r, [id]: (r[id] ?? PAGE) + PAGE }))
                       }
-                      onAdd={(lid, title) =>
+                      onAdd={(lid, title) => {
+                        const cardId = crypto.randomUUID();
                         apply({
                           kind: "card.create",
-                          cardId: crypto.randomUUID(),
+                          cardId,
                           listId: lid,
                           title,
                           position: atEnd(cardsInList(state, lid).at(-1)?.position ?? null),
-                        })
-                      }
+                        });
+                        return cardId;
+                      }}
+                      onAttach={async (cardId, files) => {
+                        for (const file of files) await uploadToCard(cardId, file);
+                        // The rows are the server's, so the board has to be re-read.
+                        await refresh();
+                      }}
                       onRenameList={(lid, title) =>
                         apply({ kind: "list.rename", listId: lid, title })
                       }

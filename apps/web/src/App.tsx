@@ -600,6 +600,7 @@ function Workspace({
           {view === "board" && (
             <Board
               state={state}
+              refresh={refresh}
               filter={filter}
               groupBy={groupBy}
               apply={apply}

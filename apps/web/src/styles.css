@@ -1629,3 +1629,46 @@ button.attach-thumb:hover { border-color: var(--beam); transform: translateY(-1p
   background: var(--beam-wash);
   border-radius: 6px; padding: 4px 8px; margin-bottom: 6px;
 }
+
+/* ---- the card as two columns: the card on the left, the talking on the right */
+.drawer.modal { width: min(1040px, 96vw); }
+.drawer.modal .drawer-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  padding: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+.drawer.modal .drawer-main { overflow-y: auto; padding: 18px 20px 28px; min-width: 0; }
+.drawer.modal .drawer-side {
+  overflow-y: auto;
+  padding: 16px 18px 28px;
+  border-left: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  min-width: 0;
+}
+.side-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 10px;
+}
+.side-head h3 {
+  margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.01em;
+  font-family: "Bricolage Grotesque", "Noto Sans Georgian", Geist, sans-serif;
+}
+.side-head .btn { padding: 4px 9px; font-size: 11.5px; }
+.side-activity { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+
+/*
+ * Narrow screens get the old single column back. Two columns inside 96vw of a
+ * phone is two columns of nothing.
+ */
+@media (max-width: 860px) {
+  .drawer.modal .drawer-body { grid-template-columns: 1fr; }
+  .drawer.modal .drawer-side {
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
+  }
+}
+
+/* A composer that is busy creating a card from a dropped file says so. */
+.composer.busy { opacity: 0.6; pointer-events: none; }

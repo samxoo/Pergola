@@ -5,6 +5,7 @@ import type { BoardState, Card as CardModel, List } from "@pergola/shared";
 import { useDialogs } from "../lib/Dialogs.js";
 import { InlineEdit } from "../lib/InlineEdit.js";
 import { useT } from "../lib/i18n.js";
+import { filesFrom } from "../lib/upload.js";
 import { Card } from "./Card.js";
 
 type Props = {
@@ -18,7 +19,10 @@ type Props = {
   cards: CardModel[];
   /** True while a dragged card is destined for this bay. See Board.tsx. */
   lit: boolean;
-  onAdd: (listId: string, title: string) => void;
+  /** Returns the new card's id, so a composer can attach a file to it. */
+  onAdd: (listId: string, title: string) => string;
+  /** Files pasted or dropped while adding a card. */
+  onAttach: (cardId: string, files: File[]) => Promise<void>;
   onRenameList: (id: string, title: string) => void;
   onDeleteList: (id: string, cardCount: number) => void;
   /** Cards this cell holds but is not rendering, to keep the board responsive. */
@@ -39,6 +43,7 @@ export function Column({
   hidden,
   onShowMore,
   onAdd,
+  onAttach,
   onRenameList,
   onDeleteList,
   onSetWip,
@@ -151,15 +156,42 @@ export function Column({
         </button>
       )}
 
-      <Composer onAdd={(title) => onAdd(list.id, title)} />
+      <Composer onAdd={(title) => onAdd(list.id, title)} onAttach={onAttach} />
     </section>
   );
 }
 
-function Composer({ onAdd }: { onAdd: (title: string) => void }) {
+function Composer({
+  onAdd,
+  onAttach,
+}: {
+  onAdd: (title: string) => string;
+  onAttach: (cardId: string, files: File[]) => Promise<void>;
+}) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  /**
+   * A screenshot pasted or dropped here becomes a card with the image on it.
+   *
+   * The typed text is the title if there is any; otherwise the file names it,
+   * which is what someone dropping a picture into a list means by it. The card
+   * is created first because the upload needs something to attach to.
+   */
+  const withFiles = async (files: File[]) => {
+    if (files.length === 0 || busy) return;
+    setBusy(true);
+    try {
+      const typed = text.trim();
+      const cardId = onAdd(typed || files[0]!.name.replace(/\.[^.]+$/, ""));
+      setText("");
+      await onAttach(cardId, files);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = () => {
     const title = text.trim();
@@ -168,18 +200,36 @@ function Composer({ onAdd }: { onAdd: (title: string) => void }) {
     setText(""); // stay open: adding several cards in a row is the common case
   };
 
+  // Dropping on the closed composer works too: it is the target that reads as
+  // "put something in this list" even when nothing is being typed.
+  const dropProps = {
+    onDragOver: (e: React.DragEvent) => e.preventDefault(),
+    onDrop: (e: React.DragEvent) => {
+      const files = filesFrom(e.dataTransfer);
+      if (files.length === 0) return;
+      e.preventDefault();
+      void withFiles(files);
+    },
+    onPaste: (e: React.ClipboardEvent) => {
+      const files = filesFrom(e.clipboardData);
+      if (files.length === 0) return; // plain text still pastes as text
+      e.preventDefault();
+      void withFiles(files);
+    },
+  };
+
   if (!open) {
     return (
-      <div className="composer">
+      <div className={`composer${busy ? " busy" : ""}`} {...dropProps}>
         <button type="button" onClick={() => setOpen(true)}>
-          {t("Add a card")}
+          {busy ? t("Adding…") : t("Add a card")}
         </button>
       </div>
     );
   }
 
   return (
-    <div className="composer">
+    <div className={`composer${busy ? " busy" : ""}`} {...dropProps}>
       <textarea
         autoFocus
         rows={2}

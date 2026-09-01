@@ -44,6 +44,8 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
   const [zoom, setZoom] = useState<{ url: string; name: string } | null>(null);
   /** The comment being answered, if the composer is in reply mode. */
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
+  /** The activity log is reference: folded away until asked for. */
+  const [showActivity, setShowActivity] = useState(false);
   const { ask, confirm, tell } = useDialogs();
   const list = state.lists.find((l) => l.id === card.listId);
   const checklists = checklistsFor(state, card.id);
@@ -126,6 +128,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
         </header>
 
         <div className="drawer-body">
+          <div className="drawer-main">
           <InlineEdit
             value={card.title}
             onCommit={(title) => apply({ kind: "card.rename", cardId: card.id, title })}
@@ -701,13 +704,28 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
             ))}
           </Section>
 
-          {/* ---- activity ---- */}
-          <Section title={t("Activity")}>
-            <Activity boardId={state.id} cardId={card.id} cursor={state.seq} />
-          </Section>
+          </div>
 
-          {/* ---- comments ---- */}
-          <Section title={t("Comments")}>
+          {/*
+            * Comments beside the card, not below it.
+            *
+            * A conversation is the part people come back to, and stacking it
+            * under the description meant scrolling past everything else to
+            * reach it. The activity log lives here too, folded away: it is
+            * reference, wanted occasionally and in the way permanently.
+            */}
+          <aside className="drawer-side">
+            <div className="side-head">
+              <h3>{t("Comments and activity")}</h3>
+              <button
+                className="btn"
+                type="button"
+                aria-pressed={showActivity}
+                onClick={() => setShowActivity((v) => !v)}
+              >
+                {showActivity ? t("Hide details") : t("Show details")}
+              </button>
+            </div>
             <AddComment
               replyingTo={replyTo ? nameOf(memberById.get(replyTo.authorId), t) : null}
               onCancelReply={() => setReplyTo(null)}
@@ -750,7 +768,13 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                 )}
               </div>
             ))}
-          </Section>
+
+            {showActivity && (
+              <div className="side-activity">
+                <Activity boardId={state.id} cardId={card.id} cursor={state.seq} />
+              </div>
+            )}
+          </aside>
         </div>
       </aside>
       {zoom && (
