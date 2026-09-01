@@ -28,7 +28,7 @@ export async function runMigrations(): Promise<void> {
 }
 
 // `pnpm db:migrate` runs this file directly.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   await runMigrations();
   console.log("migrations applied");
   process.exit(0);
