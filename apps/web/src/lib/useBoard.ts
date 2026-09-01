@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { dequeue, enqueue, readQueue } from "./queue.js";
+import { connect } from "./realtime.js";
 import {
   reduce,
   type BoardState,
@@ -7,16 +8,15 @@ import {
   type MutationBody,
   type MutationEnvelope,
   type MutationRecord,
-  type ServerFrame,
 } from "@pergola/shared";
 
 /**
  * Everything the board needs to stay in sync.
  *
- * The rule that keeps this small: the socket writes to state, it never triggers
- * a refetch. A card moving on someone else's screen costs zero round-trips on
- * yours. And the same `reduce()` from @pergola/shared serves the optimistic
- * path and the socket path, so if it is right once it is right twice.
+ * The rule that keeps this small: the live connection writes to state, it never
+ * triggers a refetch. A card moving on someone else's screen costs zero
+ * round-trips on yours. And the same `reduce()` from @pergola/shared serves the
+ * optimistic path and the live path, so if it is right once it is right twice.
  */
 export function useBoard(boardId: string | null, meId: string | null) {
   const [state, setState] = useState<BoardState | null>(null);
@@ -27,7 +27,7 @@ export function useBoard(boardId: string | null, meId: string | null) {
   // Inverses of our own writes, newest last. Undo pops one and submits it as a
   // fresh mutation — so undo is replicated, undoable, and visible to everyone.
   const undoStack = useRef<MutationBody[]>([]);
-  // Read inside the socket handler without making it a dependency.
+  // Read inside the frame handler without making it a dependency.
   const seqRef = useRef(0);
 
   const load = useCallback(async () => {
@@ -48,48 +48,26 @@ export function useBoard(boardId: string | null, meId: string | null) {
     void load();
   }, [load]);
 
-  // ---- socket: subscribe from the snapshot cursor, then stay caught up ----
+  // ---- live: subscribe from the snapshot cursor, then stay caught up ----
   useEffect(() => {
     if (!boardId || !state) return;
-    let ws: WebSocket | null = null;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    let closed = false;
-    let backoff = 500;
-
-    const connect = () => {
-      if (closed) return;
-      const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${proto}://${location.host}/ws`);
-
-      ws.onopen = () => {
-        backoff = 500;
-        setLive(true);
-        ws?.send(JSON.stringify({ type: "subscribe", boardId, since: seqRef.current }));
-      };
-
-      ws.onmessage = (ev) => {
-        const frame = JSON.parse(ev.data as string) as ServerFrame;
+    /*
+     * Which transport this is — a WebSocket or an SSE stream — depends on where
+     * the instance is deployed, and is entirely lib/realtime.ts's problem. From
+     * here it is one thing: frames arrive, and reconnecting resumes from the
+     * cursor, so the catch-up path and the steady-state path are the same code.
+     */
+    const conn = connect(boardId, {
+      cursor: () => seqRef.current,
+      onLive: setLive,
+      onFrame: (frame) => {
         if (frame.type !== "delta") return;
         applyDelta(frame.mutations);
-      };
-
-      ws.onclose = () => {
-        setLive(false);
-        if (closed) return;
-        // Reconnect resubscribes from the current cursor, so the catch-up path
-        // and the steady-state path are the same code.
-        retry = setTimeout(connect, backoff);
-        backoff = Math.min(backoff * 2, 10_000);
-      };
-
-      ws.onerror = () => ws?.close();
-    };
-
-    connect();
+      },
+    });
     return () => {
-      closed = true;
-      clearTimeout(retry);
-      ws?.close();
+      setLive(false);
+      conn.close();
     };
     // Only re-run when the board changes, not on every state update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,7 +168,7 @@ export function useBoard(boardId: string | null, meId: string | null) {
     setPending(readQueue(boardId).length);
   }, [boardId, send]);
 
-  // Drain on load, whenever the socket comes back, and when the browser says so.
+  // Drain on load, whenever the connection comes back, and when the browser says so.
   useEffect(() => {
     if (!boardId) return;
     setPending(readQueue(boardId).length);

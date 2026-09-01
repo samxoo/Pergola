@@ -25,11 +25,30 @@ const check = (ok: boolean, label: string) => {
 };
 const section = (s: string) => console.log(`\n  ${s}\n  ${"-".repeat(s.length)}`);
 
+/**
+ * fetch, but survive a connection the server has already hung up on.
+ *
+ * Node keeps connections alive and reuses them. A request the server refuses
+ * mid-body — the oversized upload below is one — leaves a socket that looks
+ * reusable and is not, and the *next* unrelated request is the one that dies
+ * with "fetch failed". Retrying once on exactly that error keeps a client-side
+ * pooling artefact from being reported as a broken endpoint.
+ */
+async function fetchLive(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    const code = (err as { cause?: { code?: string } })?.cause?.code;
+    if (code !== "UND_ERR_SOCKET" && code !== "ECONNRESET") throw err;
+    return await fetch(url, init);
+  }
+}
+
 /** A signed-in browser, cookie jar and all. */
 async function signIn(email: string, name: string, adminCookie?: string) {
   let cookie = "";
   const call = async (path: string, body?: unknown, method = "POST") => {
-    const r = await fetch(BASE + path, {
+    const r = await fetchLive(BASE + path, {
       method,
       headers: {
         "content-type": "application/json",
@@ -144,6 +163,72 @@ function waitFor(ws: WebSocket, want: (f: ServerFrame) => boolean, ms = 4000) {
   });
 }
 
+/**
+ * The same subscription, over the transport a serverless deployment uses.
+ *
+ * There is no socket to hold open there, so the server streams the identical
+ * frames over SSE instead. Asserting both here is the point: two transports
+ * that drift apart would be two protocols, and only one of them would be tested.
+ */
+function openStream(cookie: string, boardId: string, since: number) {
+  const abort = new AbortController();
+  const frames: ServerFrame[] = [];
+  let failed: number | null = null;
+
+  const ready = fetch(`${BASE}/api/stream?boardId=${boardId}&since=${since}`, {
+    headers: { cookie, accept: "text/event-stream" },
+    signal: abort.signal,
+  }).then(async (res) => {
+    if (!res.ok || !res.body) {
+      failed = res.status;
+      return res;
+    }
+    void (async () => {
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          // SSE frames are separated by a blank line; everything we send is a
+          // single `data:` line carrying one ServerFrame.
+          let cut = buffer.indexOf("\n\n");
+          for (; cut !== -1; cut = buffer.indexOf("\n\n")) {
+            const block = buffer.slice(0, cut);
+            buffer = buffer.slice(cut + 2);
+            const data = block
+              .split("\n")
+              .filter((l) => l.startsWith("data:"))
+              .map((l) => l.slice(5).trim())
+              .join("");
+            if (data) frames.push(JSON.parse(data) as ServerFrame);
+          }
+        }
+      } catch {
+        // The abort below is the ordinary way this ends.
+      }
+    })();
+    return res;
+  });
+
+  return {
+    ready,
+    status: () => failed,
+    close: () => abort.abort(),
+    async waitFor(want: (f: ServerFrame) => boolean, ms = 6000) {
+      const until = Date.now() + ms;
+      for (;;) {
+        const hit = frames.find(want);
+        if (hit) return hit;
+        if (Date.now() > until) throw new Error(`stream timed out after ${ms}ms`);
+        await new Promise((r) => setTimeout(r, 25));
+      }
+    },
+  };
+}
+
 const open = (cookie: string) =>
   new Promise<WebSocket>((resolve, reject) => {
     const ws = new WebSocket(WS, { headers: { cookie } });
@@ -216,6 +301,40 @@ async function main() {
     inv?.kind === "card.move" && inv.toListId === todo.id,
     "and a move's inverse points back at the original list",
   );
+
+  /* ---------------------------------------------------- realtime over SSE */
+  const sse = openStream(dana.cookie(), board.id, snap.seq);
+  await sse.ready;
+  check(sse.status() === null, "an SSE stream opens for a member");
+  const helloFrame = await sse.waitFor((f) => f.type === "hello");
+  check(helloFrame.type === "hello", "and opens with the same hello frame the socket sends");
+
+  const streamed = await dana.mutate(board.id, {
+    kind: "card.rename",
+    cardId,
+    title: "Renamed for the stream",
+  });
+  const viaStream = (await sse.waitFor(
+    (f) => f.type === "delta" && f.mutations.some((m) => m.seq === streamed.seq),
+  )) as Extract<ServerFrame, { type: "delta" }>;
+  check(
+    viaStream.mutations.some((m) => m.body.kind === "card.rename"),
+    "and delivers the same delta the socket does, with no socket",
+  );
+  // Put the title back: everything after this section reads the board as the
+  // sections above it left it, and a test that quietly moves the furniture is
+  // worse than no test.
+  await dana.mutate(board.id, streamed.inverse!);
+  sse.close();
+
+  const strangerStream = await fetch(`${BASE}/api/stream?boardId=${board.id}`, {
+    headers: { accept: "text/event-stream" },
+  });
+  check(strangerStream.status === 401, "but not to someone with no session");
+  const badBoard = await fetch(`${BASE}/api/stream?boardId=not-a-uuid`, {
+    headers: { cookie: dana.cookie(), accept: "text/event-stream" },
+  });
+  check(badBoard.status === 400, "and a malformed board id is a 400, not a stream");
 
   /* ------------------------------------------------------------ M1 verbs */
   section("Cards in full");
@@ -907,9 +1026,20 @@ async function main() {
   check(svg.status === 201, "an SVG can still be attached");
   const svgUrl = ((await svg.json()) as { url: string }).url;
   const svgBack = await fetch(`${BASE}${svgUrl}`, { headers: { cookie: dana.cookie() } });
+  /*
+   * An SVG is an image and previews as one, which is why it is not clamped to a
+   * download like the rest of the executable family. What makes that safe is the
+   * sandbox: an <img> never runs script, and a direct visit to the file is
+   * stripped of the privileges that would let the onload above do anything.
+   */
   check(
-    (svgBack.headers.get("content-type") ?? "").startsWith("application/octet-stream"),
-    "but it is served as a download, never as something the browser will run",
+    (svgBack.headers.get("content-type") ?? "").startsWith("image/svg+xml"),
+    "an SVG is served as an image, so a card can preview it",
+  );
+  const svgPolicy = svgBack.headers.get("content-security-policy") ?? "";
+  check(
+    svgPolicy.includes("sandbox") && svgPolicy.includes("default-src 'none'"),
+    "but sandboxed, so opening it directly cannot run script in our origin",
   );
 
   const html = await upload("page.html", "text/html", "<script>alert(1)</script>");

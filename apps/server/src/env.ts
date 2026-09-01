@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isServerless } from "./runtime.js";
 
 const Env = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
@@ -31,14 +32,42 @@ const Env = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 
-const parsed = Env.safeParse(process.env);
+/**
+ * What the platform already knows.
+ *
+ * A deployment's own URL is the one setting an operator cannot know before the
+ * first deploy, and getting it wrong locks everyone out of sign-in with a CSRF
+ * rejection that names nothing. Where the host tells us — Vercel does — we use
+ * it, and an explicitly configured value still wins.
+ *
+ *   VERCEL_PROJECT_PRODUCTION_URL  the stable domain, so it is a sane default
+ *   VERCEL_URL                     this exact deployment, so preview builds can
+ *                                  be signed into as well as production
+ */
+const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+const deploymentUrl = process.env.VERCEL_URL?.trim();
+
+const parsed = Env.safeParse({
+  ...process.env,
+  BETTER_AUTH_URL:
+    process.env.BETTER_AUTH_URL?.trim() || (productionUrl ? `https://${productionUrl}` : undefined),
+  TRUSTED_ORIGINS: [process.env.TRUSTED_ORIGINS, deploymentUrl && `https://${deploymentUrl}`]
+    .filter(Boolean)
+    .join(","),
+});
 
 if (!parsed.success) {
-  console.error("Configuration problem:\n");
-  for (const issue of parsed.error.issues) {
-    console.error(`  ${issue.path.join(".")}: ${issue.message}`);
-  }
-  console.error("\nCopy .env.example to .env and fill it in.\n");
+  const problems = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
+  console.error(`Configuration problem:\n\n${problems}\n`);
+  /*
+   * A process that owns its own lifetime exits, so a container restarts into the
+   * same clear message instead of serving errors. A function invocation does not
+   * own the process it is running in — exiting there kills the instance with no
+   * response and no log line anybody can act on, so it throws and lets the
+   * platform surface it.
+   */
+  if (isServerless) throw new Error(`Configuration problem:\n${problems}`);
+  console.error('Copy .env.example to .env and fill it in.\n');
   process.exit(1);
 }
 
@@ -74,7 +103,9 @@ export function warnIfDegraded(): void {
     );
   }
 
-  if (realtimeMode === "poll") {
+  // Only a long-lived process holds a LISTEN connection; on a serverless host
+  // every stream polls by design, so this would be a warning about nothing.
+  if (realtimeMode === "poll" && !isServerless) {
     console.warn(
       [
         "",

@@ -173,3 +173,22 @@ export async function authorizeWrite(boardId: string, actor: Actor, kind: Mutati
   }
   return role;
 }
+
+/**
+ * Is this person still allowed on this board, right now?
+ *
+ * Both halves of revocation — taken off the board, or deactivated outright —
+ * asked in one place because both live subscriptions need it. A subscription
+ * outlives the request that opened it, so authorising once at subscribe time is
+ * not enough: without a re-check, removing someone leaves their open connection
+ * streaming every change on the board until they close the tab.
+ */
+export async function stillHasAccess(userId: string, boardId: string): Promise<boolean> {
+  const [live] = await db
+    .select({ deactivatedAt: user.deactivatedAt })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+  if (!live || live.deactivatedAt) return false;
+  return (await roleOn(boardId, userId)) !== null;
+}

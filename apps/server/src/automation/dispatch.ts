@@ -4,6 +4,7 @@ import { commit } from "../mutations/commit.js";
 import { runRules } from "./engine.js";
 import { notifyFor } from "./notify.js";
 import { deliver } from "./webhooks.js";
+import { background } from "../runtime.js";
 
 /**
  * Everything that happens *because* a mutation happened.
@@ -13,6 +14,12 @@ import { deliver } from "./webhooks.js";
  * notifications are awaited because they are local and fast, and because tests
  * and the UI both want them settled before the response returns. Webhook
  * delivery is not — an unreachable endpoint is the endpoint's problem.
+ *
+ * That last part is the one thing that cannot simply be fired off and forgotten:
+ * a serverless host freezes the instance the moment the response is sent, which
+ * would turn "delivered eventually" into "delivered sometimes". background()
+ * hands the work to the platform's keep-alive where there is one, and otherwise
+ * waits for it — see runtime.ts.
  */
 export async function commitAndDispatch(
   env: MutationEnvelope,
@@ -34,7 +41,7 @@ export async function commitAndDispatch(
   if (rules.status === "rejected") console.error("[dispatch] rules failed:", rules.reason);
   if (notes.status === "rejected") console.error("[dispatch] notifications failed:", notes.reason);
 
-  void deliver(record).catch((err) => console.error("[dispatch] webhook delivery:", err));
+  await background(deliver(record), "dispatch: webhook delivery");
 
   return record;
 }

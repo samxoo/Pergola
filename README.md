@@ -121,6 +121,60 @@ docker compose -f docker/compose.yaml up -d app
 > would keep working while live updates silently stopped. Pergola detects this
 > at startup, warns, and falls back to polling rather than appearing to be live.
 
+### Vercel and Supabase
+
+The same codebase also deploys without a server to run it: the client as static
+files on Vercel's CDN, the API as one function, with Postgres and file storage
+on Supabase. Nothing is kept on the instance itself, which is what lets it
+survive having no disk and no process between requests.
+
+1. **Supabase.** Create a project. Under *Storage*, create a **private** bucket
+   named `attachments`. You will need three things from *Project Settings*: the
+   **pooled** connection string (Database → Connection pooling, port 6543), the
+   project URL, and the service key.
+
+2. **Vercel.** Import the repository and leave *Root Directory* as the
+   repository root — `vercel.json` there builds the client, the server and the
+   function together. Do not set it to `apps/server`: that directory builds a
+   long-lived server, which is the other deployment.
+
+3. **Environment variables**, in the Vercel project:
+
+   | Variable | Value |
+   | --- | --- |
+   | `DATABASE_URL` | the pooled Supabase string, port 6543 |
+   | `BETTER_AUTH_SECRET` | a fresh secret, generated as above |
+   | `STORAGE_DRIVER` | `supabase` |
+   | `SUPABASE_URL` | `https://<ref>.supabase.co` |
+   | `SUPABASE_SECRET_KEY` | the service key |
+   | `SUPABASE_STORAGE_BUCKET` | `attachments`, unless you named it something else |
+
+   `BETTER_AUTH_URL` is filled in from the deployment's own domain, so it only
+   needs setting once a custom domain is in front. Leave `DATABASE_DIRECT_URL`
+   unset: it exists for the `LISTEN`/`NOTIFY` listener, which a function cannot
+   hold open anyway.
+
+4. **Deploy.** The production build applies migrations before the function goes
+   live. Preview builds deliberately do not — they usually point at the same
+   database, and a half-finished migration from a branch is not something to
+   apply by accident. Set `RUN_MIGRATIONS=1` when that is genuinely what you
+   want.
+
+Three things behave differently there, and only three:
+
+- **Live updates arrive over SSE**, not a WebSocket, because a function cannot
+  hold a socket open. The frames are identical and the client picks the
+  transport by asking `/api/health`; nothing in the interface changes. A stream
+  ends itself just under a minute and the browser resumes from the last event it
+  saw, so a platform timeout is an ordinary reconnect rather than a gap.
+- **Uploads go to the Supabase bucket** rather than a volume. The bucket stays
+  private: bytes are still served through `/api/files/:id`, which is where board
+  membership and the safe-content-type rules live.
+- **Migrations run at deploy**, not at boot, because there is no boot.
+
+Everything else — the write path, authorization, automation, webhooks, exports —
+is the same code running in a different shape.
+
 ### Without Docker
 
 Requires Node 20 or newer, pnpm, and a reachable Postgres 16 or newer.
@@ -144,8 +198,14 @@ All configuration is by environment variable. Only the first two are required.
 | `DATABASE_DIRECT_URL` | unset | Direct, non-pooled connection for live updates. See above. |
 | `PORT` | `3000` | Port to listen on. |
 | `TRUSTED_ORIGINS` | unset | Additional origins allowed to sign in, comma separated. |
-| `STORAGE_DRIVER` | `local` | Where uploaded files are kept. |
+| `STORAGE_DRIVER` | `local` | Where uploaded files are kept: `local` or `supabase`. |
 | `STORAGE_DIR` | `./data/uploads` | Directory used by the local driver. |
+| `SUPABASE_URL` | unset | Project URL. Required by the `supabase` driver. |
+| `SUPABASE_SECRET_KEY` | unset | Service key. Required by the `supabase` driver. |
+| `SUPABASE_STORAGE_BUCKET` | `attachments` | Bucket the `supabase` driver writes to. |
+| `RUNTIME` | detected | `node` or `serverless`. Only set it for a host neither is guessed correctly on. |
+| `REALTIME_STREAM_SECONDS` | `50` | How long one SSE stream lives before inviting a reconnect. |
+| `REALTIME_POLL_MS` | `2000` | How often a stream checks for changes where there is no listener. |
 | `WEBHOOK_ALLOW_PRIVATE` | `false` | Permit webhooks to private addresses. Development only; see [Webhooks](#webhooks). |
 
 Generate a signing secret with:
@@ -282,6 +342,9 @@ Worth reading first:
   row and reads two, whatever the length of the list.
 - `apps/server/src/realtime/bus.ts` — fan-out over Postgres `LISTEN`/`NOTIFY`, so
   multiple application replicas need no Redis.
+- `apps/server/src/app.ts` — the app, with no side effects, so the same routes
+  are served by `index.ts` (one long-lived process, a port, a socket) and by
+  `api/` on a serverless host. `runtime.ts` is the only place that knows which.
 - `apps/server/src/auth/guard.ts` — one capability table, checked in one
   middleware.
 - `apps/server/src/automation/engine.ts` — automation rules, which produce

@@ -1,5 +1,6 @@
 import { createLocalStorage } from "./local.js";
 import { createSupabaseStorage } from "./supabase.js";
+import { isServerless } from "../runtime.js";
 
 /**
  * Where uploaded bytes live.
@@ -38,6 +39,19 @@ export interface Storage {
  */
 export function createStorage(): Storage {
   const driver = process.env.STORAGE_DRIVER?.trim() || "local";
+
+  /*
+   * A serverless host has no writable disk and no disk that survives the next
+   * invocation, so the default driver would accept an upload and lose it — or
+   * fail with an EROFS deep inside a request weeks after the deploy. Refusing at
+   * boot, by name, is the difference between a five-second fix and an afternoon.
+   */
+  if (driver === "local" && isServerless) {
+    throw new Error(
+      'STORAGE_DRIVER is "local", which needs a writable disk this runtime does not have. ' +
+        'Set STORAGE_DRIVER=supabase (with SUPABASE_URL and SUPABASE_SECRET_KEY).',
+    );
+  }
 
   switch (driver) {
     case "local":
