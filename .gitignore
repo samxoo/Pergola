@@ -1,10 +1,15 @@
 node_modules/
 dist/
-.env
-.env.local
+# Every .env variant, because the one that leaks is always the one nobody
+# thought to list: .env.local, .env.backup, .env.production.old.
+.env*
+!.env.example
 *.log
 .DS_Store
 apps/web/dist/
 apps/server/dist/
 apps/server/public/
 apps/server/data/uploads/
+
+# Local tool settings, not project source.
+.claude/

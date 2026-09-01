@@ -19,8 +19,21 @@ import * as schema from "./schema.js";
 export const pool = new pg.Pool({
   connectionString: env.DATABASE_URL,
   max: isServerless ? 3 : 10,
-  // A frozen instance holding an idle connection is holding it for nothing.
-  ...(isServerless ? { idleTimeoutMillis: 10_000, allowExitOnIdle: true } : {}),
+  ...(isServerless
+    ? {
+        // A frozen instance holding an idle connection is holding it for nothing.
+        idleTimeoutMillis: 10_000,
+        allowExitOnIdle: true,
+        /*
+         * pg waits forever by default. On a host that bills by the second and
+         * kills the request at a hard ceiling, a connection that never
+         * establishes — a wrong host, a firewall, a paused database — burns the
+         * entire duration and answers with nothing at all, which is far harder
+         * to diagnose than an error. Fail fast and say why.
+         */
+        connectionTimeoutMillis: 10_000,
+      }
+    : {}),
 });
 
 export const db = drizzle(pool, { schema });

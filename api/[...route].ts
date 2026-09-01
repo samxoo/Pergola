@@ -9,6 +9,11 @@ import { app } from "../apps/server/dist/app.js";
  * no port is bound, no WebSocket is upgraded, and no migration runs (the build
  * does that once, rather than every cold start).
  *
+ * The filename is a catch-all — `[...route]` — because that is what Vercel's
+ * own file-system routing understands in an `api/` directory. The doubled
+ * `[[...route]]` form is a Next.js convention, and a project that is not Next
+ * quietly ends up with a function nothing routes to.
+ *
  * A one-argument function on purpose: that is the signature the platform reads
  * as a Web handler, taking a Request and returning a Response. Passing
  * `app.fetch` itself would leave that to the arity of somebody else's function.
