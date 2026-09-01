@@ -148,6 +148,12 @@ button { font: inherit; color: inherit; }
   font-size: 13px;
   transition: border-color 0.14s, color 0.14s, background 0.14s;
 }
+/*
+ * Outline buttons. A filled variant must restate its own fill below: this
+ * selector carries more specificity than a bare `.btn.primary`, so a variant
+ * that sets only a colour on hover keeps its light text and loses its dark
+ * background — which is invisible text, in both themes.
+ */
 .btn:hover:not(:disabled) { border-color: var(--beam); color: var(--beam); background: var(--beam-wash); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn:focus-visible { outline: 2px solid var(--beam); outline-offset: 2px; }
@@ -458,7 +464,13 @@ kbd {
   color: var(--ground);
   font-weight: 500;
 }
-.btn.primary:hover:not(:disabled) { filter: brightness(1.1); color: var(--ground); }
+.btn.primary:hover:not(:disabled) {
+  /* Fill and border restated, not inherited — see the note on .btn:hover. */
+  background: var(--beam);
+  border-color: var(--beam);
+  color: var(--ground);
+  filter: brightness(1.1);
+}
 
 .linkish {
   background: none;
@@ -1023,7 +1035,12 @@ kbd {
   color: var(--ground);
   font-weight: 500;
 }
-.btn.destructive:hover:not(:disabled) { filter: brightness(1.1); color: var(--ground); }
+.btn.destructive:hover:not(:disabled) {
+  background: var(--rust);
+  border-color: var(--rust);
+  color: var(--ground);
+  filter: brightness(1.1);
+}
 
 /* ================================================================ M3 ===== */
 
