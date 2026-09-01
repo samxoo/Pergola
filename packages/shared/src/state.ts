@@ -87,6 +87,8 @@ export type Comment = {
   cardId: string;
   authorId: string;
   body: string;
+  /** The comment this answers, or null for one that starts a thread. */
+  parentId: string | null;
   createdAt: string;
   editedAt: string | null;
 };
@@ -422,6 +424,7 @@ export function reduce(state: BoardState, body: MutationBody, meta: Meta): Board
             cardId: body.cardId,
             authorId: meta.actorId ?? "",
             body: body.body,
+            parentId: body.parentId ?? null,
             createdAt: meta.at,
             editedAt: null,
           },
@@ -513,6 +516,52 @@ export function commentsFor(state: BoardState, cardId: string): Comment[] {
   return state.comments
     .filter((c) => c.cardId === cardId)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)); // newest first
+}
+
+/** A comment and the replies under it. */
+export type CommentThread = { comment: Comment; replies: Comment[] };
+
+/**
+ * A card's comments as threads.
+ *
+ * Threads newest first, the way the flat list has always read, but the replies
+ * inside one oldest first — a conversation is read downwards even when the
+ * conversations themselves are stacked newest at the top.
+ *
+ * Nesting is one deep on purpose. A reply to a reply joins the same thread
+ * rather than indenting again, so no conversation can walk off the right-hand
+ * edge, and a reply whose parent has been deleted resurfaces as its own thread
+ * instead of vanishing with it.
+ */
+export function commentThreads(state: BoardState, cardId: string): CommentThread[] {
+  const mine = state.comments.filter((c) => c.cardId === cardId);
+  const byId = new Map(mine.map((c) => [c.id, c]));
+
+  /** Walk up to the comment that starts the thread, guarding against a cycle. */
+  const rootOf = (c: Comment): Comment => {
+    const seen = new Set<string>([c.id]);
+    let at = c;
+    while (at.parentId) {
+      const up = byId.get(at.parentId);
+      if (!up || seen.has(up.id)) break;
+      seen.add(up.id);
+      at = up;
+    }
+    return at;
+  };
+
+  const replies = new Map<string, Comment[]>();
+  const roots: Comment[] = [];
+  for (const c of mine) {
+    const root = rootOf(c);
+    if (root.id === c.id) roots.push(c);
+    else replies.set(root.id, [...(replies.get(root.id) ?? []), c]);
+  }
+
+  const oldestFirst = (a: Comment, b: Comment) => (a.createdAt < b.createdAt ? -1 : 1);
+  return roots
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map((comment) => ({ comment, replies: (replies.get(comment.id) ?? []).sort(oldestFirst) }));
 }
 
 /** Ticked / total across a card's checklists — what the badge shows. */

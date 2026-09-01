@@ -220,6 +220,8 @@ export const CommentCreate = z.object({
   commentId: id,
   cardId: id,
   body: z.string().min(1).max(10_000),
+  /** The comment being answered. Absent for one that starts a thread. */
+  parentId: id.nullish(),
 });
 export const CommentEdit = z.object({
   kind: z.literal("comment.edit"),

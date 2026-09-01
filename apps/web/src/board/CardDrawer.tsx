@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   atEnd,
   attachmentsFor,
   checklistsFor,
-  commentsFor,
+  commentThreads,
   itemsFor,
   type BoardState,
   type Card,
+  type Comment,
   type CustomField,
   type MutationBody,
 } from "@pergola/shared";
@@ -15,6 +16,7 @@ import { Activity } from "./Activity.js";
 import { InlineEdit } from "../lib/InlineEdit.js";
 import { LABEL_NAMES, avatarColor, hexFor, initials } from "../lib/labels.js";
 import { useT, useDateLocale } from "../lib/i18n.js";
+import { Icon } from "../lib/Icon.js";
 
 type Props = {
   state: BoardState;
@@ -40,11 +42,13 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
   const locale = useDateLocale();
   const [panel, setPanel] = useState<Panel>(null);
   const [zoom, setZoom] = useState<{ url: string; name: string } | null>(null);
+  /** The comment being answered, if the composer is in reply mode. */
+  const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const { ask, confirm, tell } = useDialogs();
   const list = state.lists.find((l) => l.id === card.listId);
   const checklists = checklistsFor(state, card.id);
   const attachments = attachmentsFor(state, card.id);
-  const comments = commentsFor(state, card.id);
+  const threads = commentThreads(state, card.id);
   const memberById = new Map(state.members.map((m) => [m.id, m]));
 
   useEffect(() => {
@@ -62,6 +66,51 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
   }, [panel, zoom, onClose]);
 
   const toggle = (p: Panel) => setPanel((cur) => (cur === p ? null : p));
+
+  /**
+   * Put a file on this card.
+   *
+   * One path, whichever way the file arrived — the picker, a drop, or a paste
+   * from the clipboard. The server writes the row itself, so the board is
+   * reloaded afterwards rather than a mutation being applied optimistically.
+   */
+  const upload = async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`/api/cards/${card.id}/files`, { method: "POST", body: form });
+    if (!res.ok) {
+      const { message } = (await res.json().catch(() => ({}))) as { message?: string };
+      await tell({
+        title: t("That file was not accepted"),
+        description: message ?? t("Try a smaller file."),
+      });
+      return;
+    }
+    await refresh();
+  };
+
+  /*
+   * Paste a screenshot straight onto the card.
+   *
+   * Bound to the drawer rather than a particular field, because a screenshot is
+   * pasted at whatever happens to have focus — and taken only when the clipboard
+   * actually carries a file, so pasting text into the comment box still pastes
+   * text.
+   */
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = [...(e.clipboardData?.items ?? [])]
+        .filter((i) => i.kind === "file")
+        .map((i) => i.getAsFile())
+        .filter((f): f is File => f !== null);
+      if (files.length === 0) return;
+      e.preventDefault();
+      for (const f of files) void upload(f);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card.id]);
 
   return (
     <>
@@ -126,14 +175,52 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
           )}
 
           {/* ---- actions ---- */}
+          {/*
+            * One row of chips, each an icon and a word. The panel a chip opens
+            * stays marked while it is open, so the row doubles as the indicator
+            * of where you are rather than needing a second one.
+            */}
           <div className="actions">
-            <button className="btn" type="button" onClick={() => toggle("labels")}>{t("Labels")}</button>
-            <button className="btn" type="button" onClick={() => toggle("members")}>{t("Members")}</button>
-            <button className="btn" type="button" onClick={() => toggle("dates")}>{t("Dates")}</button>
-            <button className="btn" type="button" onClick={() => toggle("cover")}>{t("Cover")}</button>
             <button
-              className={`btn${meId && card.voterIds.includes(meId) ? " primary" : ""}`}
+              className={`cardact${panel === "labels" ? " on" : ""}`}
               type="button"
+              aria-expanded={panel === "labels"}
+              onClick={() => toggle("labels")}
+            >
+              <Icon name="tag" />
+              {t("Labels")}
+            </button>
+            <button
+              className={`cardact${panel === "members" ? " on" : ""}`}
+              type="button"
+              aria-expanded={panel === "members"}
+              onClick={() => toggle("members")}
+            >
+              <Icon name="user" />
+              {t("Members")}
+            </button>
+            <button
+              className={`cardact${panel === "dates" ? " on" : ""}`}
+              type="button"
+              aria-expanded={panel === "dates"}
+              onClick={() => toggle("dates")}
+            >
+              <Icon name="clock" />
+              {t("Dates")}
+            </button>
+            <button
+              className={`cardact${panel === "cover" ? " on" : ""}`}
+              type="button"
+              aria-expanded={panel === "cover"}
+              onClick={() => toggle("cover")}
+            >
+              <Icon name="image" />
+              {t("Cover")}
+            </button>
+            <button
+              className={`cardact${meId && card.voterIds.includes(meId) ? " voted" : ""}`}
+              type="button"
+              aria-pressed={Boolean(meId && card.voterIds.includes(meId))}
               onClick={() =>
                 apply({
                   kind: "card.vote",
@@ -143,10 +230,12 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
               }
               title={t("One vote each")}
             >
-              ▲ {t("Vote")}{card.voterIds.length > 0 ? ` · ${card.voterIds.length}` : ""}
+              <Icon name="vote" />
+              {t("Vote")}
+              {card.voterIds.length > 0 && <b className="actcount">{card.voterIds.length}</b>}
             </button>
             <button
-              className="btn"
+              className="cardact"
               type="button"
               onClick={() => {
                 apply({ kind: "card.archive", cardId: card.id, archived: true });
@@ -154,6 +243,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
               }}
               title={t("Archiving can be undone with ⌘Z")}
             >
+              <Icon name="archive" />
               {t("Archive")}
             </button>
           </div>
@@ -366,9 +456,6 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
               </button>
             }
           >
-            {state.fields.length === 0 && (
-              <p className="muted">{t("None on this board yet.")}</p>
-            )}
             {state.fields.map((f) => (
               <FieldRow
                 key={f.id}
@@ -425,7 +512,6 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
               </button>
             }
           >
-            {checklists.length === 0 && <p className="muted">{t("None yet.")}</p>}
             {checklists.map((cl) => {
               const items = itemsFor(state, cl.id);
               const done = items.filter((i) => i.done).length;
@@ -529,29 +615,16 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                 // reader already agrees on; the big target just makes it obvious.
                 const picker = document.createElement("input");
                 picker.type = "file";
-                picker.onchange = async () => {
+                picker.onchange = () => {
                   const file = picker.files?.[0];
-                  if (!file) return;
-                  const form = new FormData();
-                  form.append("file", file);
-                  const res = await fetch(`/api/cards/${card.id}/files`, {
-                    method: "POST",
-                    body: form,
-                  });
-                  if (!res.ok) {
-                    const { message } = (await res.json().catch(() => ({}))) as {
-                      message?: string;
-                    };
-                    await tell({
-                      title: t("That file was not accepted"),
-                      description: message ?? t("Try a smaller file."),
-                    });
-                    return;
-                  }
-                  // The server has already written the row; pull it into view.
-                  await refresh();
+                  if (file) void upload(file);
                 };
                 picker.click();
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                for (const f of e.dataTransfer.files) void upload(f);
               }}
             >
               <span className="az-ic" aria-hidden="true">⬆</span>
@@ -636,58 +709,47 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
           {/* ---- comments ---- */}
           <Section title={t("Comments")}>
             <AddComment
-              onSend={(body) =>
+              replyingTo={replyTo ? nameOf(memberById.get(replyTo.authorId), t) : null}
+              onCancelReply={() => setReplyTo(null)}
+              onSend={(body) => {
                 apply({
                   kind: "comment.create",
                   commentId: crypto.randomUUID(),
                   cardId: card.id,
                   body,
-                })
-              }
+                  parentId: replyTo?.id ?? null,
+                });
+                setReplyTo(null);
+              }}
             />
-            {comments.length === 0 && <p className="muted">{t("No comments yet.")}</p>}
-            {comments.map((cm) => {
-              const author = memberById.get(cm.authorId);
-              return (
-                <div key={cm.id} className="comment">
-                  <span
-                    className="chip avatar"
-                    style={{ background: avatarColor(cm.authorId) }}
-                    title={author?.name ?? t("Someone")}
-                  >
-                    {initials(author?.name ?? author?.email ?? "?")}
-                  </span>
-                  <div className="comment-body">
-                    <div className="comment-meta">
-                      <strong>{author?.name ?? t("Someone")}</strong>
-                      <span className="muted mono">{when(cm.createdAt, t, locale)}</span>
-                      {cm.editedAt && <span className="muted">{t("edited")}</span>}
-                    </div>
-                    <InlineEdit
-                      value={cm.body}
-                      onCommit={(body) => apply({ kind: "comment.edit", commentId: cm.id, body })}
-                      className="comment-edit"
-                      multiline
-                      ariaLabel={t("Comment")}
-                    >
-                      {(open) => (
-                        <p onDoubleClick={cm.authorId === meId ? open : undefined}>{cm.body}</p>
-                      )}
-                    </InlineEdit>
+            {threads.map(({ comment: root, replies }) => (
+              <div key={root.id} className="thread">
+                <CommentRow
+                  comment={root}
+                  author={memberById.get(root.authorId)}
+                  meId={meId}
+                  onReply={() => setReplyTo(root)}
+                  onEdit={(body) => apply({ kind: "comment.edit", commentId: root.id, body })}
+                  onDelete={() => apply({ kind: "comment.delete", commentId: root.id })}
+                />
+                {replies.length > 0 && (
+                  <div className="thread-replies">
+                    {replies.map((r) => (
+                      <CommentRow
+                        key={r.id}
+                        comment={r}
+                        author={memberById.get(r.authorId)}
+                        meId={meId}
+                        /* A reply to a reply joins this thread rather than nesting again. */
+                        onReply={() => setReplyTo(root)}
+                        onEdit={(body) => apply({ kind: "comment.edit", commentId: r.id, body })}
+                        onDelete={() => apply({ kind: "comment.delete", commentId: r.id })}
+                      />
+                    ))}
                   </div>
-                  {cm.authorId === meId && (
-                    <button
-                      className="icon-btn"
-                      type="button"
-                      aria-label={t("Delete comment")}
-                      onClick={() => apply({ kind: "comment.delete", commentId: cm.id })}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+                )}
+              </div>
+            ))}
           </Section>
         </div>
       </aside>
@@ -863,12 +925,104 @@ function AddItem({ onAdd }: { onAdd: (text: string) => void }) {
   );
 }
 
-function AddComment({ onSend }: { onSend: (body: string) => void }) {
+/** Who wrote it, falling back through name, email, then a placeholder. */
+function nameOf(
+  who: { name?: string; email?: string } | undefined,
+  t: (k: string) => string,
+): string {
+  return who?.name || who?.email || t("Someone");
+}
+
+/**
+ * One comment, whether it starts a thread or answers one.
+ *
+ * The same row either way: a reply is not a different kind of thing, it just
+ * sits inside a thread. Actions are the author's own — anyone may reply, only
+ * the writer may edit or delete.
+ */
+function CommentRow({
+  comment: cm,
+  author,
+  meId,
+  onReply,
+  onEdit,
+  onDelete,
+}: {
+  comment: Comment;
+  author: { id: string; name: string; email: string } | undefined;
+  meId: string | null;
+  onReply: () => void;
+  onEdit: (body: string) => void;
+  onDelete: () => void;
+}) {
+  const t = useT();
+  const locale = useDateLocale();
+  const mine = cm.authorId === meId;
+  const who = nameOf(author, t);
+
+  return (
+    <div className="comment">
+      <span
+        className="chip avatar"
+        style={{ background: avatarColor(cm.authorId) }}
+        title={who}
+        aria-hidden="true"
+      >
+        {initials(who)}
+      </span>
+      <div className="comment-body">
+        <div className="comment-meta">
+          <strong>{who}</strong>
+          <span className="muted mono">{when(cm.createdAt, t, locale)}</span>
+          {cm.editedAt && <span className="muted">{t("edited")}</span>}
+        </div>
+        <InlineEdit
+          value={cm.body}
+          onCommit={onEdit}
+          className="comment-edit"
+          multiline
+          ariaLabel={t("Comment")}
+        >
+          {(open) => <p onDoubleClick={mine ? open : undefined}>{cm.body}</p>}
+        </InlineEdit>
+        <div className="comment-actions">
+          <button className="linkish" type="button" onClick={onReply}>
+            {t("Reply")}
+          </button>
+          {mine && (
+            <button className="linkish" type="button" onClick={onDelete}>
+              {t("Delete")}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddComment({
+  onSend,
+  replyingTo,
+  onCancelReply,
+}: {
+  onSend: (body: string) => void;
+  /** Whose comment is being answered, or null when starting a new thread. */
+  replyingTo: string | null;
+  onCancelReply: () => void;
+}) {
   const t = useT();
   const [body, setBody] = useState("");
+  const box = useRef<HTMLTextAreaElement>(null);
+
+  // Choosing Reply should put the cursor where the reply gets typed, rather
+  // than leaving a banner on screen and the person hunting for the box.
+  useEffect(() => {
+    if (replyingTo) box.current?.focus();
+  }, [replyingTo]);
+
   return (
     <form
-      className="add-comment"
+      className={`add-comment${replyingTo ? " replying" : ""}`}
       onSubmit={(e) => {
         e.preventDefault();
         const b = body.trim();
@@ -877,18 +1031,32 @@ function AddComment({ onSend }: { onSend: (body: string) => void }) {
         setBody("");
       }}
     >
+      {replyingTo && (
+        <div className="replying-to">
+          <span>{t("Replying to {name}", { name: replyingTo })}</span>
+          <button className="linkish" type="button" onClick={onCancelReply}>
+            {t("Cancel")}
+          </button>
+        </div>
+      )}
       <textarea
+        ref={box}
         rows={2}
         value={body}
-        placeholder={t("Write a comment")}
+        placeholder={replyingTo ? t("Write a reply") : t("Write a comment")}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             e.currentTarget.form?.requestSubmit();
           }
+          // Escape leaves reply mode before it reaches the drawer and closes it.
+          if (e.key === "Escape" && replyingTo) {
+            e.stopPropagation();
+            onCancelReply();
+          }
         }}
-        aria-label={t("Write a comment")}
+        aria-label={replyingTo ? t("Write a reply") : t("Write a comment")}
       />
       <div className="add-comment-foot">
         <span className="muted">
@@ -896,7 +1064,7 @@ function AddComment({ onSend }: { onSend: (body: string) => void }) {
           <kbd>Enter</kbd> {t("to post")}
         </span>
         <button className="btn primary" type="submit" disabled={!body.trim()}>
-          {t("Comment")}
+          {replyingTo ? t("Reply") : t("Comment")}
         </button>
       </div>
     </form>

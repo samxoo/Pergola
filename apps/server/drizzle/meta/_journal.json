@@ -50,6 +50,13 @@
       "when": 1788012716047,
       "tag": "0006_instance_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788269219814,
+      "tag": "0007_confused_sleepwalker",
+      "breakpoints": true
     }
   ]
 }

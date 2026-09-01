@@ -446,11 +446,21 @@ export const handlers: Handlers = {
   "comment.create": async (tx, boardId, b, actorId) => {
     await getCard(tx, boardId, b.cardId);
     if (!actorId) throw new Stale("Your session");
+    /*
+     * A reply's parent has to be a comment on this same card. Without the
+     * check, a client could hang a reply off any comment id it knows and have
+     * it rendered inside a thread on a card — or a board — it cannot read.
+     */
+    if (b.parentId) {
+      const parent = await getComment(tx, boardId, b.parentId);
+      if (parent.cardId !== b.cardId) throw new Stale("That comment");
+    }
     await tx.insert(comment).values({
       id: b.commentId,
       cardId: b.cardId,
       authorId: actorId,
       body: b.body,
+      parentId: b.parentId ?? null,
     });
     return { kind: "comment.delete", commentId: b.commentId };
   },
@@ -474,6 +484,7 @@ export const handlers: Handlers = {
       commentId: prev.id,
       cardId: prev.cardId,
       body: prev.body,
+      parentId: prev.parentId,
     };
   },
 };

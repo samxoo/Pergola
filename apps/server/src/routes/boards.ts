@@ -285,6 +285,7 @@ export const boards = new Hono<Env>()
         cardId: m.cardId,
         authorId: m.authorId,
         body: m.body,
+        parentId: m.parentId,
         createdAt: m.createdAt.toISOString(),
         editedAt: m.editedAt?.toISOString() ?? null,
       })),

@@ -9,6 +9,7 @@ import WebSocket from "ws";
 import { verify } from "./automation/signature.js";
 import {
   atEnd,
+  commentThreads,
   type BoardState,
   type MutationBody,
   type MutationRecord,
@@ -335,6 +336,78 @@ async function main() {
     headers: { cookie: dana.cookie(), accept: "text/event-stream" },
   });
   check(badBoard.status === 400, "and a malformed board id is a 400, not a stream");
+
+  /* ------------------------------------------------------- threaded replies */
+  section("Comment threads");
+  const rootId = randomUUID();
+  await dana.mutate(board.id, {
+    kind: "comment.create",
+    commentId: rootId,
+    cardId,
+    body: "Does this need a second pair of eyes?",
+  });
+  const replyId = randomUUID();
+  await dana.mutate(board.id, {
+    kind: "comment.create",
+    commentId: replyId,
+    cardId,
+    body: "Yes — I will look this afternoon.",
+    parentId: rootId,
+  });
+
+  const withThread = await dana.json<BoardState>(`/api/boards/${board.id}`);
+  const rootBack = withThread.comments.find((c) => c.id === rootId);
+  const replyBack = withThread.comments.find((c) => c.id === replyId);
+  check(rootBack?.parentId === null, "a comment that starts a thread has no parent");
+  check(replyBack?.parentId === rootId, "and a reply names the comment it answers");
+
+  const threads = commentThreads(withThread, cardId);
+  const thread = threads.find((t) => t.comment.id === rootId);
+  check(thread?.replies.length === 1, "the reply is grouped under its thread, not loose beside it");
+  check(
+    threads.every((t) => t.comment.id !== replyId),
+    "and does not also appear as a thread of its own",
+  );
+
+  /*
+   * A reply must belong to the same card as the comment it answers. Otherwise a
+   * client could hang one off any comment id it has seen and have it rendered
+   * inside a conversation on a card — or a board — it cannot read.
+   */
+  const otherCardId = randomUUID();
+  await dana.mutate(board.id, {
+    kind: "card.create",
+    cardId: otherCardId,
+    listId: todo.id,
+    title: "Somewhere else",
+    position: atEnd(null),
+  });
+  const crossCard = await dana.tryMutate(board.id, {
+    kind: "comment.create",
+    commentId: randomUUID(),
+    cardId: otherCardId,
+    body: "Attaching myself to another card's conversation",
+    parentId: rootId,
+  });
+  check(crossCard.status === 409, "a reply cannot be attached across cards");
+
+  const foreignParent = await dana.tryMutate(board.id, {
+    kind: "comment.create",
+    commentId: randomUUID(),
+    cardId,
+    body: "Answering a comment that does not exist",
+    parentId: randomUUID(),
+  });
+  check(foreignParent.status === 409, "nor to a comment that does not exist");
+
+  // Deleting a thread takes its replies: they only mean anything underneath it.
+  await dana.mutate(board.id, { kind: "comment.delete", commentId: rootId });
+  const afterDelete = await dana.json<BoardState>(`/api/boards/${board.id}`);
+  check(
+    !afterDelete.comments.some((c) => c.id === rootId || c.id === replyId),
+    "deleting a thread takes its replies with it",
+  );
+  await dana.mutate(board.id, { kind: "card.delete", cardId: otherCardId });
 
   /* ------------------------------------------------------------ M1 verbs */
   section("Cards in full");

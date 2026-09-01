@@ -1551,3 +1551,81 @@ button.attach-thumb:hover { border-color: var(--beam); transform: translateY(-1p
   transition: background 0.14s;
 }
 .lightbox-close:hover { background: rgb(255 255 255 / 26%); }
+
+/* ============================================ card detail, second pass ====
+ * A row of icon chips instead of a row of words, threaded comments, and less
+ * vertical space spent saying that a section is empty.
+ */
+
+/* ---- action chips ---- */
+.actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.cardact {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--ink-soft, var(--ink));
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.14s, color 0.14s, background 0.14s;
+}
+.cardact .ic { flex: none; opacity: 0.75; }
+.cardact:hover { border-color: var(--beam); color: var(--beam); background: var(--beam-wash); }
+.cardact:hover .ic { opacity: 1; }
+.cardact:focus-visible { outline: 2px solid var(--beam); outline-offset: 2px; }
+/* The open panel's chip stays marked, so the row says where you are. */
+.cardact.on,
+.cardact.voted {
+  border-color: var(--beam);
+  color: var(--beam);
+  background: var(--beam-wash);
+}
+.cardact.on .ic, .cardact.voted .ic { opacity: 1; }
+.actcount {
+  margin-left: 2px; font-size: 11px; font-weight: 600;
+  background: var(--beam); color: var(--ground);
+  border-radius: 999px; padding: 0 5px; line-height: 15px;
+}
+
+/* ---- sections: an empty one should cost a line, not a paragraph ---- */
+.drawer-section { margin-top: 14px; }
+.drawer-section .section-head { margin-bottom: 6px; }
+.drawer-section > .muted:only-of-type { margin: 2px 0 0; font-size: 12px; }
+
+/* ---- comments as a conversation ---- */
+.thread { margin-top: 10px; }
+.thread + .thread { border-top: 1px solid var(--line-soft); padding-top: 10px; }
+.comment { display: flex; gap: 9px; align-items: flex-start; }
+.comment + .comment { margin-top: 8px; }
+.comment-body { flex: 1; min-width: 0; }
+.comment-meta { display: flex; align-items: baseline; gap: 7px; font-size: 12px; }
+.comment-body p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Actions stay out of the way until the comment is under the pointer. */
+.comment-actions { display: flex; gap: 10px; margin-top: 3px; opacity: 0; transition: opacity 0.12s; }
+.comment:hover .comment-actions,
+.comment:focus-within .comment-actions { opacity: 1; }
+.comment-actions .linkish { font-size: 11.5px; }
+@media (hover: none) { .comment-actions { opacity: 1; } }
+
+/*
+ * Replies sit under their thread behind a rule, one level deep and no further,
+ * so a long back-and-forth cannot walk off the right-hand edge.
+ */
+.thread-replies {
+  margin: 8px 0 0 14px;
+  padding-left: 13px;
+  border-left: 2px solid var(--line-soft);
+}
+.thread-replies .comment .chip.avatar { width: 22px; height: 22px; font-size: 9.5px; }
+
+/* ---- the composer, in reply mode ---- */
+.add-comment.replying { border-color: var(--beam); }
+.replying-to {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 12px; color: var(--beam);
+  background: var(--beam-wash);
+  border-radius: 6px; padding: 4px 8px; margin-bottom: 6px;
+}

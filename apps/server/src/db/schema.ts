@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { customType } from "drizzle-orm/pg-core";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   index,
@@ -248,10 +249,23 @@ export const comment = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
+    /*
+     * The comment this one answers. Null starts a thread.
+     *
+     * Self-referencing, so the type has to be spelled out rather than inferred.
+     * Cascade on delete: removing a comment takes the replies that only make
+     * sense underneath it, the same way removing a card takes its comments.
+     */
+    parentId: uuid("parent_id").references((): AnyPgColumn => comment.id, {
+      onDelete: "cascade",
+    }),
     editedAt: timestamp("edited_at", { withTimezone: true }),
     createdAt: now(),
   },
-  (t) => [index("comment_card_idx").on(t.cardId, t.createdAt)],
+  (t) => [
+    index("comment_card_idx").on(t.cardId, t.createdAt),
+    index("comment_parent_idx").on(t.parentId),
+  ],
 );
 
 /**
