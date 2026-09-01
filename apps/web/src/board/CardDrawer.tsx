@@ -39,6 +39,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
   const t = useT();
   const locale = useDateLocale();
   const [panel, setPanel] = useState<Panel>(null);
+  const [zoom, setZoom] = useState<{ url: string; name: string } | null>(null);
   const { ask, confirm, tell } = useDialogs();
   const list = state.lists.find((l) => l.id === card.listId);
   const checklists = checklistsFor(state, card.id);
@@ -52,12 +53,13 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
       const el = e.target as HTMLElement | null;
       // Escape belongs to whatever field is open before it belongs to the drawer.
       if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT")) return;
+      if (zoom) return setZoom(null);
       if (panel) return setPanel(null);
       onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panel, onClose]);
+  }, [panel, zoom, onClose]);
 
   const toggle = (p: Panel) => setPanel((cur) => (cur === p ? null : p));
 
@@ -65,7 +67,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
     <>
       {/* Dimmed but not blacked out: the board stays legible and live behind it. */}
       <div className="scrim" onClick={onClose} aria-hidden="true" />
-      <aside className="drawer" role="dialog" aria-label={card.title}>
+      <aside className="drawer modal" role="dialog" aria-modal="true" aria-label={card.title}>
         <header className="drawer-head">
           <span className="mono card-no">PRG-{card.number}</span>
           <span className="drawer-crumb">{t("in {list}", { list: list?.title ?? "—" })}</span>
@@ -518,51 +520,50 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
           </Section>
 
           {/* ---- attachments ---- */}
-          <Section
-            title={t("Attachments")}
-            action={
-              <span className="attach-actions">
-              <button
-                className="linkish"
-                type="button"
-                onClick={() => {
-                  /*
-                   * A hidden input rather than a drop zone: the picker is the
-                   * one affordance every browser and screen reader already
-                   * agrees on, and a card drawer is a poor drop target anyway.
-                   */
-                  const picker = document.createElement("input");
-                  picker.type = "file";
-                  picker.onchange = async () => {
-                    const file = picker.files?.[0];
-                    if (!file) return;
-                    const form = new FormData();
-                    form.append("file", file);
-                    const res = await fetch(`/api/cards/${card.id}/files`, {
-                      method: "POST",
-                      body: form,
+          <Section title={t("Attachments")}>
+            <button
+              type="button"
+              className="attach-dropzone"
+              onClick={() => {
+                // A hidden file input is the affordance every browser and screen
+                // reader already agrees on; the big target just makes it obvious.
+                const picker = document.createElement("input");
+                picker.type = "file";
+                picker.onchange = async () => {
+                  const file = picker.files?.[0];
+                  if (!file) return;
+                  const form = new FormData();
+                  form.append("file", file);
+                  const res = await fetch(`/api/cards/${card.id}/files`, {
+                    method: "POST",
+                    body: form,
+                  });
+                  if (!res.ok) {
+                    const { message } = (await res.json().catch(() => ({}))) as {
+                      message?: string;
+                    };
+                    await tell({
+                      title: t("That file was not accepted"),
+                      description: message ?? t("Try a smaller file."),
                     });
-                    if (!res.ok) {
-                      const { message } = (await res.json().catch(() => ({}))) as {
-                        message?: string;
-                      };
-                      await tell({
-                        title: t("That file was not accepted"),
-                        description: message ?? t("Try a smaller file."),
-                      });
-                      return;
-                    }
-                    // The server has already written the row; pull it into view.
-                    await refresh();
-                  };
-                  picker.click();
-                }}
-              >
-                {t("Upload")}
-              </button>
+                    return;
+                  }
+                  // The server has already written the row; pull it into view.
+                  await refresh();
+                };
+                picker.click();
+              }}
+            >
+              <span className="az-ic" aria-hidden="true">⬆</span>
+              <span>
+                <b>{t("Upload a file")}</b>
+                {t("Image, PDF or document — click to choose.")}
+              </span>
+            </button>
+            <div style={{ marginBottom: 12 }}>
               <button
-                className="linkish"
                 type="button"
+                className="btn-attach"
                 onClick={async () => {
                   const answer = await ask({
                     title: t("Attach a link"),
@@ -589,19 +590,32 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                   });
                 }}
               >
-                {t("Link")}
+                🔗 {t("Add a link")}
               </button>
-              </span>
-            }
-          >
-            {attachments.length === 0 && <p className="muted">{t("None.")}</p>}
+            </div>
             {attachments.map((a) => (
               <div key={a.id} className="attach-row">
-                {/* Untrusted destination: never let it reach back into this tab. */}
-                <a href={a.url} target="_blank" rel="noopener noreferrer nofollow">
-                  {a.name}
-                </a>
-                <span className="muted mono attach-host">{hostOf(a.url)}</span>
+                {isImageName(a.name) ? (
+                  <button
+                    type="button"
+                    className="attach-thumb"
+                    onClick={() => setZoom({ url: a.url, name: a.name })}
+                    aria-label={t("Preview {name}", { name: a.name })}
+                  >
+                    <img src={a.url} alt={a.name} loading="lazy" />
+                  </button>
+                ) : (
+                  <span className="attach-thumb file" aria-hidden="true">
+                    📄
+                  </span>
+                )}
+                <div className="attach-info">
+                  {/* Untrusted destination: never let it reach back into this tab. */}
+                  <a href={a.url} target="_blank" rel="noopener noreferrer nofollow">
+                    {a.name}
+                  </a>
+                  <span className="muted mono attach-host">{hostOf(a.url)}</span>
+                </div>
                 <button
                   className="icon-btn"
                   type="button"
@@ -677,8 +691,33 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
           </Section>
         </div>
       </aside>
+      {zoom && (
+        <div
+          className="lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={zoom.name}
+          onClick={() => setZoom(null)}
+        >
+          <img src={zoom.url} alt={zoom.name} onClick={(e) => e.stopPropagation()} />
+          <button
+            className="lightbox-close"
+            type="button"
+            aria-label={t("Close")}
+            onClick={() => setZoom(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
     </>
   );
+}
+
+/** Uploaded files keep their real name, so the extension is a good-enough hint. */
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg)$/i;
+function isImageName(name: string): boolean {
+  return IMAGE_EXT.test(name.trim());
 }
 
 /* -------------------------------------------------------------- fragments */

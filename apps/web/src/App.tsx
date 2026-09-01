@@ -11,13 +11,14 @@ import { Settings } from "./board/Settings.js";
 import { Notifications } from "./lib/Notifications.js";
 import { Mark } from "./lib/Mark.js";
 import { Palette, type Action, type Hit } from "./lib/Palette.js";
-import { EMPTY, type Filter } from "./lib/filters.js";
+import { EMPTY, isActive, type Filter } from "./lib/filters.js";
 import { authClient } from "./lib/auth.js";
 import { useDialogs } from "./lib/Dialogs.js";
 import { avatarColor, initials } from "./lib/labels.js";
 import { useBoard } from "./lib/useBoard.js";
 import { SignIn } from "./SignIn.js";
 import { useT, usePlural, LanguageToggle } from "./lib/i18n.js";
+import { Menu, MenuItem } from "./lib/Menu.js";
 
 type BoardSummary = { id: string; title: string; seq: number; role: string };
 
@@ -57,6 +58,7 @@ function Workspace({
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const runsTheInstance = meRole === "owner" || meRole === "admin";
   const { ask, tell } = useDialogs();
   const { state, live, pending, error, apply, undo, refresh, dismissError } = useBoard(
@@ -371,29 +373,36 @@ function Workspace({
         <button className="btn" type="button" onClick={createBoard}>
           {t("New board")}
         </button>
-        <button className="btn" type="button" onClick={importTrello} title={t("Import a Trello JSON export")}>
-          {t("Import")}
-        </button>
-        {boardId && (
-          <button className="btn" type="button" onClick={duplicateBoard} title={t("Copy this board, with or without its cards")}>
-            {t("Duplicate")}
-          </button>
-        )}
-        {boardId && (
-          <button className="btn" type="button" onClick={exportBoard} title={t("Download this board as JSON")}>
-            {t("Export")}
-          </button>
-        )}
-        {boardId && (
-          <button className="btn" type="button" onClick={() => setSettingsOpen(true)} title={t("Automation, webhooks, sharing and tokens")}>
-            {t("Settings")}
-          </button>
-        )}
-        {boardId && (
-          <button className="btn" type="button" onClick={invite}>
-            {t("Invite")}
-          </button>
-        )}
+        <Menu label="⋯" title={t("Board actions")}>
+          {(close) => (
+            <>
+              <MenuItem icon="↧" onClick={() => { importTrello(); close(); }}>
+                {t("Import a board from Trello")}
+              </MenuItem>
+              {boardId && <div className="menu-sep" />}
+              {boardId && (
+                <MenuItem icon="⧉" onClick={() => { void duplicateBoard(); close(); }}>
+                  {t("Duplicate this board")}
+                </MenuItem>
+              )}
+              {boardId && (
+                <MenuItem icon="↥" onClick={() => { void exportBoard(); close(); }}>
+                  {t("Export this board as JSON")}
+                </MenuItem>
+              )}
+              {boardId && (
+                <MenuItem icon="⚙" onClick={() => { setSettingsOpen(true); close(); }}>
+                  {t("Settings")}
+                </MenuItem>
+              )}
+              {boardId && (
+                <MenuItem icon="＋" onClick={() => { void invite(); close(); }}>
+                  {t("Invite")}
+                </MenuItem>
+              )}
+            </>
+          )}
+        </Menu>
 
         <div className="spacer" />
 
@@ -519,14 +528,31 @@ function Workspace({
                 </select>
               </label>
             )}
+            <span className="spacer" />
+            <button
+              className={`btn filter-toggle${filtersOpen ? " on" : ""}`}
+              type="button"
+              onClick={() => setFiltersOpen((v) => !v)}
+              aria-expanded={filtersOpen}
+              aria-pressed={filtersOpen}
+            >
+              {t("Filter")}
+              {isActive(filter) && (
+                <span className="fcount" aria-hidden="true">
+                  •
+                </span>
+              )}
+            </button>
           </div>
-          <FilterBar
-            state={state}
-            filter={filter}
-            onChange={setFilter}
-            archivedCount={archivedCount}
-            onShowArchive={() => setArchiveOpen(true)}
-          />
+          {filtersOpen && (
+            <FilterBar
+              state={state}
+              filter={filter}
+              onChange={setFilter}
+              archivedCount={archivedCount}
+              onShowArchive={() => setArchiveOpen(true)}
+            />
+          )}
           {view === "board" && (
             <Board
               state={state}

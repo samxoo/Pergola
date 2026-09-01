@@ -1,4 +1,5 @@
 import { createLocalStorage } from "./local.js";
+import { createSupabaseStorage } from "./supabase.js";
 
 /**
  * Where uploaded bytes live.
@@ -41,9 +42,11 @@ export function createStorage(): Storage {
   switch (driver) {
     case "local":
       return createLocalStorage();
+    case "supabase":
+      return createSupabaseStorage();
     default:
       // Thrown at boot, where it is one line in the log, rather than on the
       // first upload weeks later, where it is a mystery.
-      throw new Error(`STORAGE_DRIVER is "${driver}"; the only driver is "local"`);
+      throw new Error(`STORAGE_DRIVER is "${driver}"; the drivers are "local" and "supabase"`);
   }
 }

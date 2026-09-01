@@ -68,14 +68,24 @@ const EXECUTES_HERE = new Set([
 
 const MIME = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/;
 
-/** Clamp on the way out, not on the way in, so the stored type stays the truth. */
-function serveAs(stored: string): string {
+/**
+ * Clamp on the way out, not on the way in, so the stored type stays the truth.
+ *
+ * Returns the type to serve and, for SVG, a Content-Security-Policy. SVG is an
+ * image and previews in an `<img>`, where scripts never run — but a direct
+ * navigation to the file would run them in our origin. The sandbox CSP closes
+ * exactly that case (no script, no outbound fetch), so a preview costs nothing.
+ */
+function serveAs(stored: string): { type: string; csp?: string } {
   const type = stored.toLowerCase().split(";")[0]?.trim() ?? "";
-  if (!MIME.test(type)) return "application/octet-stream";
-  // `+xml` is what catches image/svg+xml and application/xhtml+xml, and every
-  // future dialect nobody has thought of yet.
-  if (EXECUTES_HERE.has(type) || type.endsWith("+xml")) return "application/octet-stream";
-  return type;
+  if (!MIME.test(type)) return { type: "application/octet-stream" };
+  if (type === "image/svg+xml") {
+    return { type, csp: "default-src 'none'; style-src 'unsafe-inline'; sandbox" };
+  }
+  // The rest of the executable family — HTML, JS, non-image XML (`+xml` catches
+  // xhtml and every future dialect) — is still handed back as a download.
+  if (EXECUTES_HERE.has(type) || type.endsWith("+xml")) return { type: "application/octet-stream" };
+  return { type };
 }
 
 export const files = new Hono<Env>()
@@ -189,8 +199,10 @@ export const files = new Hono<Env>()
     const stored = await storage.get(id);
     if (!stored) return c.json({ message: "That file is no longer in storage" }, 404);
 
+    const served = serveAs(stored.contentType);
     return c.body(Readable.toWeb(Readable.from(stored.stream)), 200, {
-      "Content-Type": serveAs(stored.contentType),
+      "Content-Type": served.type,
+      ...(served.csp ? { "Content-Security-Policy": served.csp } : {}),
       "Content-Length": String(stored.size),
       "Content-Disposition": disposition(row.name),
       // Without this a browser sniffs the bytes and may conclude a text file

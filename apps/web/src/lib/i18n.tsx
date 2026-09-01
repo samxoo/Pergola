@@ -171,7 +171,7 @@ const ka: Record<string, string> = {
   // — App: topbar & workspace —
   "New board": "ახალი დაფა",
   "It starts with three lists and six labels, ready to rename.":
-    "იწყება სამი სიით და ექვსი ჭდით, გადასარქმევად მზად.",
+    "იწყება სამი სიით და ექვსი იარლიყით, გადასარქმევად მზად.",
   "Board name": "დაფის სახელი",
   "Create board": "დაფის შექმნა",
   "Invite someone": "მოიწვიე ვინმე",
@@ -191,7 +191,7 @@ const ka: Record<string, string> = {
   "The file did not look like a Trello board export.": "ფაილი არ ჰგავდა Trello დაფის ექსპორტს.",
   "Imported “{title}”": "იმპორტირებულია „{title}“",
   "{cards} cards across {lists} lists, with {labels} labels, {checklists} checklists and {comments} comments.":
-    "{cards} ბარათი {lists} სიაში, {labels} ჭდით, {checklists} ჩეკლისტითა და {comments} კომენტარით.",
+    "{cards} ბარათი {lists} სიაში, {labels} იარლიყით, {checklists} ჩეკლისტითა და {comments} კომენტარით.",
   " {count} archived card went straight to the archive.": " {count} დაარქივებული ბარათი პირდაპირ არქივში გადავიდა.",
   " {count} archived cards went straight to the archive.": " {count} დაარქივებული ბარათი პირდაპირ არქივში გადავიდა.",
   " Not carried over: {skipped}.": " არ გადმოვიდა: {skipped}.",
@@ -208,7 +208,7 @@ const ka: Record<string, string> = {
   "That export did not work": "ექსპორტი ვერ მოხერხდა",
   "Duplicate “{title}”": "„{title}“-ის დუბლირება",
   "Lists, labels, WIP limits and custom fields always come across. Cards are optional — leave them behind to use this board as a template.":
-    "სიები, ჭდეები, WIP ლიმიტები და მორგებული ველები ყოველთვის გადმოდის. ბარათები არასავალდებულოა — დატოვეთ ისინი, რომ დაფა შაბლონად გამოიყენოთ.",
+    "სიები, იარლიყები, WIP ლიმიტები და მორგებული ველები ყოველთვის გადმოდის. ბარათები არასავალდებულოა — დატოვეთ ისინი, რომ დაფა შაბლონად გამოიყენოთ.",
   "New board name": "ახალი დაფის სახელი",
   "{title} copy": "{title} ასლი",
   "Cards": "ბარათები",
@@ -238,7 +238,7 @@ const ka: Record<string, string> = {
   "Admin": "ადმინი",
   "Nothing here yet": "აქ ჯერ არაფერია",
   "Make a board and it will come with three lists and six labels to start from.":
-    "შექმენით დაფა და ის სამი სიითა და ექვსი ჭდით დაიწყება.",
+    "შექმენით დაფა და ის სამი სიითა და ექვსი იარლიყით დაიწყება.",
   "Create the first board": "შექმენით პირველი დაფა",
   "Board": "დაფა",
   "Table": "ცხრილი",
@@ -247,7 +247,7 @@ const ka: Record<string, string> = {
   "View": "ხედი",
   "Swimlanes": "ზოლები",
   "Off": "გამორთული",
-  "By label": "ჭდის მიხედვით",
+  "By label": "იარლიყის მიხედვით",
   "By member": "წევრის მიხედვით",
   "Loading board…": "დაფა იტვირთება…",
 
@@ -346,7 +346,7 @@ const ka: Record<string, string> = {
   "in {count} days": "{count} დღეში",
 
   // — Board / swimlanes / lists —
-  "No label": "ჭდის გარეშე",
+  "No label": "იარლიყის გარეშე",
   "Unassigned": "მიუნიჭებელი",
   "this list": "ეს სია",
   "Delete “{name}”?": "წაიშალოს „{name}“?",
@@ -392,7 +392,7 @@ const ka: Record<string, string> = {
   "No date": "თარიღის გარეშე",
   "Filter cards": "გაფილტრეთ ბარათები",
   "Filter cards by text": "ბარათების ფილტრი ტექსტით",
-  "Filter by label": "ფილტრი ჭდით",
+  "Filter by label": "ფილტრი იარლიყით",
   "Filter by member": "ფილტრი წევრით",
   "Filter by due date": "ფილტრი ვადით",
   "{shown} of {total}": "{shown} / {total}",
@@ -403,14 +403,14 @@ const ka: Record<string, string> = {
   "in {list}": "{list}-ში",
   "Card title": "ბარათის სათაური",
   "Click to rename": "დააწკაპუნეთ გადასარქმევად",
-  "Labels": "ჭდეები",
+  "Labels": "იარლიყები",
   "Members": "წევრები",
   "Dates": "თარიღები",
   "Cover": "გარეკანი",
   "One vote each": "თითო ხმა თითოეულს",
   "Vote": "ხმა",
   "Archiving can be undone with ⌘Z": "დაარქივება შეიძლება გაუქმდეს ⌘Z-ით",
-  "Double-click a label's text to name it.": "ორმაგად დააწკაპუნეთ ჭდის ტექსტს დასასახელებლად.",
+  "Double-click a label's text to name it.": "ორმაგად დააწკაპუნეთ იარლიყის ტექსტს დასასახელებლად.",
   "Starts": "იწყება",
   "Due": "ვადა",
   "Clear both dates": "ორივე თარიღის გასუფთავება",
@@ -467,7 +467,7 @@ const ka: Record<string, string> = {
   "Delete comment": "კომენტარის წაშლა",
   "Write a comment": "დაწერეთ კომენტარი",
   "to post": "გამოსაქვეყნებლად",
-  "Label name": "ჭდის სახელი",
+  "Label name": "იარლიყის სახელი",
   "just now": "ახლახ",
   "{count}m ago": "{count} წთ წინ",
   "{count}h ago": "{count} სთ წინ",
@@ -555,7 +555,7 @@ const ka: Record<string, string> = {
   "every checklist item is ticked": "ჩეკლისტის ყველა პუნქტი მონიშნულია",
   "a card is added": "ბარათი დაემატა",
   "a card moves": "ბარათი გადაინაცვლა",
-  "a label is added": "ჭდე დაემატა",
+  "a label is added": "იარლიყი დაემატა",
   "Then": "შემდეგ",
   "move it to a list": "გადაიტანე სიაში",
   "archive it": "დააარქივე",
@@ -610,6 +610,14 @@ const ka: Record<string, string> = {
     "ტოკენები თქვენ გეკუთვნით, არა დაფას, და წვდომა აქვთ ყველა დაფაზე, რომლის წევრიც ხართ.",
   "Last used {date}": "ბოლოს გამოყენებული {date}",
   "Never used": "არასდროს გამოყენებული",
+
+  // — UI rework —
+  "Board actions": "დაფის მოქმედებები",
+  "Filter": "ფილტრი",
+  "Upload a file": "ატვირთეთ ფაილი",
+  "Image, PDF or document — click to choose.": "სურათი, PDF ან დოკუმენტი — დააწკაპუნეთ ასარჩევად.",
+  "Add a link": "ბმულის დამატება",
+  "Preview {name}": "გადახედვა: {name}",
 };
 
 export default ka;
