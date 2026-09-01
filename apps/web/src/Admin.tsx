@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDialogs } from "./lib/Dialogs.js";
+import { copyToClipboard } from "./lib/clipboard.js";
 import { avatarColor, initials } from "./lib/labels.js";
 import { useT, usePlural, useDateLocale } from "./lib/i18n.js";
 // This sheet rides with the component rather than main.tsx: it is the only thing
@@ -231,8 +232,9 @@ export function Admin({ meId, onClose }: Props) {
       url: string;
       expiresAt: string;
     };
+    const copied = await copyToClipboard(url);
     await tell({
-      title: t("Copy this link now"),
+      title: copied ? t("Invite link copied") : t("Copy this link now"),
       description: t(
         "{url}\n\nIt is shown once and cannot be shown again. Send it to {email} yourself — there is no email server on a fresh instance. It works for one sign-up and expires {when}.",
         { url, email, when: inWords(expiresAt, t, pl) },

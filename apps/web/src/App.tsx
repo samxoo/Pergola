@@ -19,6 +19,7 @@ import { useBoard } from "./lib/useBoard.js";
 import { SignIn } from "./SignIn.js";
 import { useT, usePlural, LanguageToggle } from "./lib/i18n.js";
 import { Menu, MenuItem } from "./lib/Menu.js";
+import { copyToClipboard } from "./lib/clipboard.js";
 
 type BoardSummary = { id: string; title: string; seq: number; role: string };
 
@@ -60,7 +61,7 @@ function Workspace({
   const [adminOpen, setAdminOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const runsTheInstance = meRole === "owner" || meRole === "admin";
-  const { ask, tell } = useDialogs();
+  const { ask, confirm, tell } = useDialogs();
   const { state, live, pending, error, apply, undo, refresh, dismissError } = useBoard(
     boardId,
     meId,
@@ -137,12 +138,55 @@ function Workspace({
       await fetch(`/api/people?email=${encodeURIComponent(email)}`)
     ).json()) as { id: string; name: string }[];
     if (found.length === 0) {
-      // Say what to do about it rather than just reporting the absence.
-      await tell({
+      /*
+       * The dead end this used to be: it said "ask them to sign up first", on an
+       * instance where signing up without a link is exactly what is not allowed.
+       * Whoever followed that advice was sent straight into "this instance is
+       * invite only". So offer the thing that actually unblocks it — the link —
+       * rather than naming a door that is locked.
+       */
+      if (!runsTheInstance) {
+        await tell({
+          title: t("Nobody here uses that address"),
+          description: t(
+            "No account on this instance matches {email}, and this instance is invite only — they cannot sign up on their own. Ask an owner or admin for an invite link to send them.",
+            { email },
+          ),
+        });
+        return;
+      }
+
+      const makeOne = await confirm({
         title: t("Nobody here uses that address"),
         description: t(
-          "No account on this instance matches {email}. Ask them to sign up first, then invite them.",
+          "No account matches {email}. Create an invite link for them? They will need it to sign up, and you can add them to this board once they have.",
           { email },
+        ),
+        confirmLabel: t("Create invite link"),
+      });
+      if (!makeOne) return;
+
+      const made = await fetch("/api/admin/invites", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, role: "member" }),
+      });
+      if (!made.ok) {
+        await tell({
+          title: t("That invite was not created"),
+          description: ((await made.json()) as { message?: string }).message ?? t("Please try again."),
+        });
+        return;
+      }
+      const { url } = (await made.json()) as { url: string };
+      const copied = await copyToClipboard(url);
+      await tell({
+        title: copied ? t("Invite link copied") : t("Copy this link now"),
+        description: t(
+          copied
+            ? "{url}\n\nCopied to your clipboard. Nothing is emailed — send it to {email} however you already talk to them. It works once, for that address only, and is not shown again."
+            : "{url}\n\nCopy it now — it is not shown again. Nothing is emailed, so send it to {email} however you already talk to them. It works once, for that address only.",
+          { url, email },
         ),
       });
       return;

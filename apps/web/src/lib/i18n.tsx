@@ -181,8 +181,16 @@ const ka: Record<string, string> = {
   "Observer — reads and comments": "დამკვირვებელი — კითხულობს და აკომენტარებს",
   "Send invite": "მოწვევის გაგზავნა",
   "Nobody here uses that address": "ამ მისამართს აქ არავინ იყენებს",
-  "No account on this instance matches {email}. Ask them to sign up first, then invite them.":
-    "ამ ინსტანციაზე {email}-ს ვერცერთი ანგარიში ვერ ემთხვევა. სთხოვეთ ჯერ დარეგისტრირდნენ, შემდეგ მოიწვიეთ.",
+  "No account on this instance matches {email}, and this instance is invite only — they cannot sign up on their own. Ask an owner or admin for an invite link to send them.":
+    "ამ ინსტანციაზე {email}-ს ვერცერთი ანგარიში ვერ ემთხვევა, და ინსტანცია მხოლოდ მოწვევითაა — დამოუკიდებლად ვერ დარეგისტრირდებიან. სთხოვეთ მფლობელს ან ადმინს მოწვევის ბმული, რომ გაუგზავნოთ.",
+  "No account matches {email}. Create an invite link for them? They will need it to sign up, and you can add them to this board once they have.":
+    "{email}-ს ვერცერთი ანგარიში ვერ ემთხვევა. შევქმნათ მისთვის მოწვევის ბმული? რეგისტრაციისთვის დასჭირდებათ, ხოლო შემდეგ შეძლებთ ამ დაფაზე დამატებას.",
+  "Create invite link": "მოწვევის ბმულის შექმნა",
+  "Invite link copied": "მოწვევის ბმული დაკოპირდა",
+  "{url}\n\nCopied to your clipboard. Nothing is emailed — send it to {email} however you already talk to them. It works once, for that address only, and is not shown again.":
+    "{url}\n\nდაკოპირდა თქვენს ბუფერში. არაფერი იგზავნება ელფოსტით — გაუგზავნეთ {email}-ს ისე, როგორც ჩვეულებრივ ურთიერთობთ. მუშაობს ერთხელ, მხოლოდ ამ მისამართისთვის, და ხელახლა აღარ გამოჩნდება.",
+  "{url}\n\nCopy it now — it is not shown again. Nothing is emailed, so send it to {email} however you already talk to them. It works once, for that address only.":
+    "{url}\n\nდააკოპირეთ ახლავე — ხელახლა აღარ გამოჩნდება. არაფერი იგზავნება ელფოსტით, ამიტომ გაუგზავნეთ {email}-ს ისე, როგორც ჩვეულებრივ ურთიერთობთ. მუშაობს ერთხელ, მხოლოდ ამ მისამართისთვის.",
   "That invite did not go through": "მოწვევა ვერ გაიგზავნა",
   "That file is not JSON": "ეს ფაილი არ არის JSON",
   "Export your board from Trello with Menu → More → Print and export → Export as JSON, then pick the file it saves.":
