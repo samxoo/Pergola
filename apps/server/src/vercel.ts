@@ -1,73 +1,52 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { getRequestListener } from "@hono/node-server";
 import { app } from "./app.js";
 
 /**
- * The app as a Node request listener, for a serverless host that speaks
- * `(req, res)`.
+ * The app as a serverless function.
  *
- * Vercel's Node runtime invokes a default-exported function with Node's own
- * request and response objects. Handing it something that takes a `Request` and
- * returns a `Response` does not fail — it is simply called with `(req, res)`,
- * the returned promise is dropped, and nothing ever ends the response, so every
- * request hangs until the platform's timeout kills it. A 60s stall with no body
- * and no log line is a miserable thing to debug, so the shape is explicit here
- * rather than inferred from a function's arity.
+ * Exported as one function per HTTP method, taking a `Request` and returning a
+ * `Response`. That is not decoration — it is what selects the platform's
+ * web-standard calling convention, and the alternative silently breaks writes:
+ * a default-exported `(req, res)` handler gets Node objects whose body the
+ * runtime has already parsed for you, so reading it as a stream waits for an
+ * `end` that has been and gone. GET works, every POST hangs until the function
+ * times out, and nothing is logged. Measured, on a deployment that did exactly
+ * that.
  *
- * The adapter is the same one the long-lived server uses, so streaming — which
- * the SSE route depends on — behaves identically in both deployments.
+ * Streaming still works on this path, which is what the SSE route needs: a
+ * Response carrying a ReadableStream is streamed to the client.
  */
-const listener = getRequestListener(app.fetch);
-
-export default async function handler(
-  incoming: IncomingMessage,
-  outgoing: ServerResponse,
-): Promise<void> {
-  /*
-   * TLS terminates at the edge, so the socket here is plain HTTP and the
-   * adapter would reconstruct an http:// URL for a request the browser made
-   * over https. It takes an absolute URL verbatim, so give it the real one:
-   * anything deriving a link, a callback or a cookie's Secure flag from the
-   * request should see the scheme the client actually used.
-   */
-  restorePath(incoming);
-
-  const forwarded = header(incoming, "x-forwarded-proto");
-  const scheme = forwarded === "http" || forwarded === "https" ? forwarded : "https";
-  const host = header(incoming, "x-forwarded-host") ?? incoming.headers.host;
-  if (host && incoming.url?.startsWith("/")) {
-    incoming.url = `${scheme}://${host}${incoming.url}`;
-  }
-  await listener(incoming, outgoing);
+async function respond(request: Request): Promise<Response> {
+  return app.fetch(restore(request));
 }
 
 /**
  * Put the requested path back.
  *
- * File-system routing in a bare `api/` directory matches one segment and no
- * more, so /api/boards reached this function and /api/auth/sign-in/email did
- * not — it 404ed at the edge, before any of our code ran. vercel.json therefore
- * rewrites every /api path to this one function and carries the original in a
- * `__path` query parameter, which is undone here so that Hono routes on the URL
- * the client actually asked for and knows nothing about any of this.
+ * File-system routing in a bare `api/` directory matches one path segment and
+ * no more, so /api/boards reached this function and /api/auth/sign-in/email
+ * answered 404 from the edge before any of our code ran. vercel.json therefore
+ * rewrites every /api path here and carries the original in `__path`, which is
+ * undone before Hono sees the request — so routing happens on the URL the
+ * client actually asked for, and the app knows nothing about the arrangement.
  *
- * Anything else in the query string is the caller's and is preserved.
+ * Anything else in the query string belongs to the caller and is preserved.
  */
-function restorePath(incoming: IncomingMessage): void {
-  if (!incoming.url?.startsWith("/")) return;
-  const url = new URL(incoming.url, "http://rewrite.invalid");
+function restore(request: Request): Request {
+  const url = new URL(request.url);
   const original = url.searchParams.get("__path");
-  if (original === null) return;
+  if (original === null) return request;
 
   url.searchParams.delete("__path");
-  const query = url.searchParams.toString();
   const path = original.startsWith("/") ? original : `/${original}`;
-  incoming.url = `/api${path === "/" ? "" : path}${query ? `?${query}` : ""}`;
+  url.pathname = path === "/" ? "/api" : `/api${path}`;
+  // Rebuilt from the original, so method, headers and body all ride along.
+  return new Request(url, request);
 }
 
-/** A header may arrive repeated, or as a comma-joined list. Take the first. */
-function header(req: IncomingMessage, name: string): string | undefined {
-  const raw = req.headers[name];
-  const first = Array.isArray(raw) ? raw[0] : raw;
-  return first?.split(",")[0]?.trim() || undefined;
-}
+export const GET = respond;
+export const POST = respond;
+export const PUT = respond;
+export const PATCH = respond;
+export const DELETE = respond;
+export const HEAD = respond;
+export const OPTIONS = respond;
