@@ -3,6 +3,7 @@ import {
   atEnd,
   attachmentsFor,
   checklistsFor,
+  coverImageFor,
   commentThreads,
   itemsFor,
   type BoardState,
@@ -49,6 +50,8 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
   const { ask, confirm, tell } = useDialogs();
   const list = state.lists.find((l) => l.id === card.listId);
   const checklists = checklistsFor(state, card.id);
+  /* The card's picture, along the top, where it can be seen without hunting. */
+  const banner = coverImageFor(state, card.id);
   const attachments = attachmentsFor(state, card.id);
   const threads = commentThreads(state, card.id);
   const memberById = new Map(state.members.map((m) => [m.id, m]));
@@ -129,6 +132,16 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
 
         <div className="drawer-body">
           <div className="drawer-main">
+            {banner && (
+              <button
+                type="button"
+                className="drawer-banner"
+                onClick={() => setZoom({ url: banner.url, name: banner.name })}
+                aria-label={t("Preview {name}", { name: banner.name })}
+              >
+                <img src={banner.url} alt={banner.name} />
+              </button>
+            )}
           <InlineEdit
             value={card.title}
             onCommit={(title) => apply({ kind: "card.rename", cardId: card.id, title })}

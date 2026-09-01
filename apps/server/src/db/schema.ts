@@ -41,6 +41,13 @@ export const board = pgTable("board", {
   seq: bigint("seq", { mode: "number" }).notNull().default(0),
   /** Board-scoped card numbering, so cards can be named out loud: PRG-142. */
   cardSeq: integer("card_seq").notNull().default(0),
+  /**
+   * Who made it. Nullable, because boards that predate this column have nobody
+   * recorded, and because a board outlives the account that started it — the
+   * board is the team's, not one person's, so losing the name must not take the
+   * board with it.
+   */
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: now(),
 });
 

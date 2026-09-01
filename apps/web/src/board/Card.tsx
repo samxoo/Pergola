@@ -1,6 +1,8 @@
 import { useSortable } from "@dnd-kit/react/sortable";
 import {
+  attachmentsFor,
   checklistProgress,
+  coverImageFor,
   staleness,
   type BoardState,
   type Card as CardModel,
@@ -37,6 +39,9 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
     .map((id) => state.labels.find((l) => l.id === id))
     .filter((l): l is NonNullable<typeof l> => Boolean(l));
   const memberById = new Map(state.members.map((m) => [m.id, m]));
+  /* A picture is the fastest thing to recognise in a list of cards. */
+  const preview = coverImageFor(state, card.id);
+  const attachments = attachmentsFor(state, card.id);
 
   return (
     <article
@@ -54,8 +59,18 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
         }
       }}
     >
-      {card.coverColor && (
-        <div className="cover" style={{ background: hexFor(card.coverColor) }} />
+      {preview ? (
+        <img
+          className="card-preview"
+          src={preview.url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
+      ) : (
+        card.coverColor && (
+          <div className="cover" style={{ background: hexFor(card.coverColor) }} />
+        )
       )}
 
       {labels.length > 0 && (
@@ -96,6 +111,15 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
         {card.descMd && (
           <span className="badge" title={t("Has a description")} aria-label={t("Has a description")}>
             ≡
+          </span>
+        )}
+
+        {attachments.length > 0 && (
+          <span
+            className="badge mono"
+            title={t("{count} attachment(s)", { count: attachments.length })}
+          >
+            🔗 {attachments.length}
           </span>
         )}
 

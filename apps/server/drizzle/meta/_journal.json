@@ -57,6 +57,13 @@
       "when": 1788269219814,
       "tag": "0007_confused_sleepwalker",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788271053416,
+      "tag": "0008_clumsy_vulture",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
 import { MutationEnvelope, atEnd, type BoardState } from "@pergola/shared";
@@ -58,13 +59,25 @@ export const boards = new Hono<Env>()
 
   /** Only boards this person belongs to. There is no "all boards" view. */
   .get("/boards", async (c) => {
+    const maker = alias(user, "maker");
     const rows = await db
-      .select({ id: board.id, title: board.title, seq: board.seq, role: boardMember.role })
+      .select({
+        id: board.id,
+        title: board.title,
+        seq: board.seq,
+        role: boardMember.role,
+        // Who started it. A left join: a board can outlive the account that did.
+        createdBy: maker.name,
+        createdAt: board.createdAt,
+      })
       .from(board)
       .innerJoin(boardMember, eq(boardMember.boardId, board.id))
+      .leftJoin(maker, eq(maker.id, board.createdBy))
       .where(eq(boardMember.userId, actorOf(c).id))
       .orderBy(asc(board.createdAt));
-    return c.json(rows);
+    return c.json(
+      rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
+    );
   })
 
   .post(
@@ -75,7 +88,7 @@ export const boards = new Hono<Env>()
       const actor = actorOf(c);
 
       const created = await db.transaction(async (tx) => {
-        const [b] = await tx.insert(board).values({ title }).returning();
+        const [b] = await tx.insert(board).values({ title, createdBy: actor.id }).returning();
         // Whoever makes a board administers it.
         await tx.insert(boardMember).values({
           boardId: b!.id,
@@ -314,7 +327,7 @@ export const boards = new Hono<Env>()
       const actor = actorOf(c);
 
       const created = await db.transaction(async (tx) => {
-        const [b] = await tx.insert(board).values({ title }).returning();
+        const [b] = await tx.insert(board).values({ title, createdBy: actor.id }).returning();
         const boardId = b!.id;
         await tx.insert(boardMember).values({ boardId, userId: actor.id, role: "admin" });
 

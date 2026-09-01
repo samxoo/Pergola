@@ -142,7 +142,7 @@ export async function importTrello(
   const keptListIds = new Set(openLists.map((l) => l.id));
 
   return db.transaction(async (tx) => {
-    const [b] = await tx.insert(board).values({ title: data.name }).returning();
+    const [b] = await tx.insert(board).values({ title: data.name, createdBy: ownerId }).returning();
     const boardId = b!.id;
     await tx.insert(boardMember).values({ boardId, userId: ownerId, role: "admin" });
 

@@ -19,9 +19,18 @@ import { useBoard } from "./lib/useBoard.js";
 import { SignIn } from "./SignIn.js";
 import { useT, usePlural, LanguageToggle } from "./lib/i18n.js";
 import { Menu, MenuItem } from "./lib/Menu.js";
+import { Icon } from "./lib/Icon.js";
 import { copyToClipboard } from "./lib/clipboard.js";
 
-type BoardSummary = { id: string; title: string; seq: number; role: string };
+type BoardSummary = {
+  id: string;
+  title: string;
+  seq: number;
+  role: string;
+  /** Who started it. Null on a board whose creator's account is gone. */
+  createdBy: string | null;
+  createdAt: string;
+};
 
 export function App() {
   const t = useT();
@@ -60,12 +69,12 @@ function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  /** The board being looked at, from the list the picker is built from. */
+  const here = boards?.find((b) => b.id === boardId) ?? null;
   const runsTheInstance = meRole === "owner" || meRole === "admin";
   const { ask, confirm, tell } = useDialogs();
-  const { state, live, pending, error, apply, undo, refresh, dismissError } = useBoard(
-    boardId,
-    meId,
-  );
+  const { state, live, pending, error, apply, undo, redo, canUndo, canRedo, refresh, dismissError } =
+    useBoard(boardId, meId);
 
   // A filter belongs to the board you set it on, not to the next one you open.
   useEffect(() => setFilter(EMPTY), [boardId]);
@@ -414,6 +423,15 @@ function Workspace({
           </select>
         )}
 
+        {/* Who made this board, and when — the question the picker cannot answer. */}
+        {here && (
+          <span className="board-by muted" title={t("Who created this board")}>
+            {here.createdBy
+              ? t("by {name}", { name: here.createdBy })
+              : t("creator unknown")}
+          </span>
+        )}
+
         <button className="btn" type="button" onClick={createBoard}>
           {t("New board")}
         </button>
@@ -481,9 +499,33 @@ function Workspace({
           }}
         />
 
-        <button className="btn" type="button" onClick={undo} title={t("Undo (⌘Z)")}>
-          {t("Undo")}
-        </button>
+        {/*
+          * Undo and redo are icons, not words. They are used constantly and
+          * recognised instantly, and two labels in the top bar cost more room
+          * than they earn — the tooltip still names them and their shortcut.
+          */}
+        <div className="undogroup">
+          <button
+            className="btn icon-only"
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            title={t("Undo (⌘Z)")}
+            aria-label={t("Undo")}
+          >
+            <Icon name="undo" />
+          </button>
+          <button
+            className="btn icon-only"
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            title={t("Redo (⇧⌘Z)")}
+            aria-label={t("Redo")}
+          >
+            <Icon name="redo" />
+          </button>
+        </div>
 
         <div
           className={`status ${pending > 0 ? "queued" : live ? "live" : "off"}`}
@@ -495,8 +537,13 @@ function Workspace({
                 : t("Reconnecting")
           }
         >
+          {/*
+            * A dot, and a number only when there is something to report. "Live"
+            * spelled out is a word that says what the colour already says; a
+            * queue that is not draining is worth interrupting someone for.
+            */}
           <i />
-          {pending > 0 ? t("{count} pending", { count: pending }) : live ? t("Live") : t("Offline")}
+          {pending > 0 && <span>{pending}</span>}
         </div>
 
         <LanguageToggle />

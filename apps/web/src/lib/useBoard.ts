@@ -18,6 +18,9 @@ import {
  * round-trips on yours. And the same `reduce()` from @pergola/shared serves the
  * optimistic path and the live path, so if it is right once it is right twice.
  */
+/** Whether a mutation is a fresh change, an undo, or a redo. */
+type Origin = "do" | "undo" | "redo";
+
 export function useBoard(boardId: string | null, meId: string | null) {
   const [state, setState] = useState<BoardState | null>(null);
   const [live, setLive] = useState(false);
@@ -27,6 +30,16 @@ export function useBoard(boardId: string | null, meId: string | null) {
   // Inverses of our own writes, newest last. Undo pops one and submits it as a
   // fresh mutation — so undo is replicated, undoable, and visible to everyone.
   const undoStack = useRef<MutationBody[]>([]);
+  /*
+   * Redo is the other half of the same stack.
+   *
+   * Undoing sends the inverse as an ordinary mutation, so the server hands back
+   * an inverse of that — which is the original change. Putting it here rather
+   * than back on the undo stack is the whole difference between undo/redo and
+   * an undo button that flips back and forth. A fresh change clears it: once
+   * history diverges there is nothing coherent left to redo.
+   */
+  const redoStack = useRef<MutationBody[]>([]);
   // Read inside the frame handler without making it a dependency.
   const seqRef = useRef(0);
 
@@ -45,6 +58,7 @@ export function useBoard(boardId: string | null, meId: string | null) {
   useEffect(() => {
     setState(null);
     undoStack.current = [];
+    redoStack.current = [];
     void load();
   }, [load]);
 
@@ -98,7 +112,11 @@ export function useBoard(boardId: string | null, meId: string | null) {
    * them either loses work offline or hides real rejections.
    */
   const send = useCallback(
-    async (envelope: MutationEnvelope, queued: boolean): Promise<"ok" | "refused" | "offline"> => {
+    async (
+      envelope: MutationEnvelope,
+      queued: boolean,
+      origin: Origin = "do",
+    ): Promise<"ok" | "refused" | "offline"> => {
       try {
         const r = await fetch("/api/mutations", {
           method: "POST",
@@ -113,7 +131,13 @@ export function useBoard(boardId: string | null, meId: string | null) {
           return "refused";
         }
         const rec = (await r.json()) as MutationRecord;
-        if (rec.inverse) undoStack.current.push(rec.inverse);
+        if (rec.inverse) {
+          if (origin === "undo") redoStack.current.push(rec.inverse);
+          else {
+            undoStack.current.push(rec.inverse);
+            if (origin === "do") redoStack.current = [];
+          }
+        }
         applyDelta([rec]);
         if (queued) dequeue(envelope.boardId, envelope.id);
         return "ok";
@@ -132,7 +156,7 @@ export function useBoard(boardId: string | null, meId: string | null) {
    * would silently throw those away.
    */
   const apply = useCallback(
-    async (body: MutationBody) => {
+    async (body: MutationBody, origin: Origin = "do") => {
       if (!boardId) return;
       // Optimistically we are the actor and the clock is local; the echo corrects
       // both. Keeping identity out of the mutation body means a client cannot
@@ -141,7 +165,7 @@ export function useBoard(boardId: string | null, meId: string | null) {
       setState((prev) => (prev ? reduce(prev, body, optimistic) : prev));
 
       const envelope: MutationEnvelope = { id: crypto.randomUUID(), boardId, body };
-      const outcome = await send(envelope, false);
+      const outcome = await send(envelope, false, origin);
       if (outcome === "offline") {
         setPending(enqueue(boardId, envelope));
         setError("Offline — your change is saved here and will sync when the connection returns.");
@@ -184,23 +208,29 @@ export function useBoard(boardId: string | null, meId: string | null) {
 
   const undo = useCallback(() => {
     const inverse = undoStack.current.pop();
-    if (inverse) void apply(inverse);
+    if (inverse) void apply(inverse, "undo");
   }, [apply]);
 
-  // Undo is a first-class action, so it gets the shortcut people already know.
+  const redo = useCallback(() => {
+    const again = redoStack.current.pop();
+    if (again) void apply(again, "redo");
+  }, [apply]);
+
+  // Undo and redo are first-class, so they get the shortcuts people know.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement &&
         (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT");
       if (typing) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      }
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      e.preventDefault();
+      // Shift+⌘Z is redo everywhere that has both, so it is redo here too.
+      if (e.shiftKey) redo();
+      else undo();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo]);
+  }, [undo, redo]);
 
   useEffect(() => {
     if (!error) return;
@@ -218,7 +248,9 @@ export function useBoard(boardId: string | null, meId: string | null) {
     error,
     apply,
     undo,
+    redo,
     canUndo: undoStack.current.length > 0,
+    canRedo: redoStack.current.length > 0,
     dismissError: () => setError(null),
     /** Local-only reorder while a drag is in flight; committed once on drop. */
     setState,

@@ -512,6 +512,28 @@ export function attachmentsFor(state: BoardState, cardId: string): Attachment[] 
   return state.attachments.filter((a) => a.cardId === cardId);
 }
 
+/**
+ * Uploads keep their real name, so the extension is a good-enough hint. Nothing
+ * is decoded here: the worst a wrong guess costs is an <img> that does not load.
+ */
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg)$/i;
+
+export function isImageName(name: string): boolean {
+  return IMAGE_EXT.test(name.trim());
+}
+
+/**
+ * The picture that stands for a card.
+ *
+ * The first image attached to it, and no separate setting to keep in step: on a
+ * card whose point is a screenshot, that is the screenshot, and on a card
+ * without one there is nothing to show. Used by the board, where it is the
+ * preview, and by the card itself, where it is the banner along the top.
+ */
+export function coverImageFor(state: BoardState, cardId: string): Attachment | null {
+  return state.attachments.find((a) => a.cardId === cardId && isImageName(a.name)) ?? null;
+}
+
 export function commentsFor(state: BoardState, cardId: string): Comment[] {
   return state.comments
     .filter((c) => c.cardId === cardId)

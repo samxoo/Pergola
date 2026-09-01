@@ -14,7 +14,9 @@ export type IconName =
   | "vote"
   | "archive"
   | "reply"
-  | "plus";
+  | "plus"
+  | "undo"
+  | "redo";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   tag: (
@@ -52,6 +54,18 @@ const PATHS: Record<IconName, React.ReactNode> = {
   ),
   reply: <path d="M6.4 4 2.6 7.6l3.8 3.6V9c3.4 0 5.4 1 6.6 3 .2-4.4-2-6.6-6.6-6.8V4Z" />,
   plus: <path d="M8 3.4v9.2M3.4 8h9.2" />,
+  undo: (
+    <>
+      <path d="M3 8.4h6.1a3.3 3.3 0 0 1 0 6.6H6" />
+      <path d="M5.6 5.8 3 8.4l2.6 2.6" />
+    </>
+  ),
+  redo: (
+    <>
+      <path d="M13 8.4H6.9a3.3 3.3 0 0 0 0 6.6H10" />
+      <path d="m10.4 5.8 2.6 2.6-2.6 2.6" />
+    </>
+  ),
 };
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {

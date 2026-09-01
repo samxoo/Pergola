@@ -275,7 +275,7 @@ export async function importPergola(
   return db.transaction(async (tx) => {
     const [b] = await tx
       .insert(board)
-      .values({ title: title?.trim() || data.board.title })
+      .values({ title: title?.trim() || data.board.title, createdBy: ownerId })
       .returning();
     const boardId = b!.id;
     await tx.insert(boardMember).values({ boardId, userId: ownerId, role: "admin" });
