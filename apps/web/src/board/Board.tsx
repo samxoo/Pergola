@@ -13,6 +13,7 @@ import {
 import { useDialogs } from "../lib/Dialogs.js";
 import { hexFor, avatarColor, initials } from "../lib/labels.js";
 import { matches, type Filter } from "../lib/filters.js";
+import { useT, usePlural } from "../lib/i18n.js";
 import { Column } from "./Column.js";
 
 export type GroupBy = "none" | "label" | "assignee";
@@ -52,6 +53,8 @@ const splitCell = (id: string) => {
 };
 
 export function Board({ state, filter, groupBy, apply, onOpenCard }: Props) {
+  const t = useT();
+  const pl = usePlural();
   const { ask, confirm } = useDialogs();
   const lists = useMemo(() => orderedLists(state), [state]);
   const listById = useMemo(() => new Map(lists.map((l) => [l.id, l])), [lists]);
@@ -74,7 +77,7 @@ export function Board({ state, filter, groupBy, apply, onOpenCard }: Props) {
           value: l.id,
           colour: hexFor(l.color),
         })),
-        { key: "l:none", title: "No label", value: null, colour: null },
+        { key: "l:none", title: t("No label"), value: null, colour: null },
       ];
     }
     return [
@@ -84,9 +87,9 @@ export function Board({ state, filter, groupBy, apply, onOpenCard }: Props) {
         value: m.id,
         colour: avatarColor(m.id),
       })),
-      { key: "m:none", title: "Unassigned", value: null, colour: null },
+      { key: "m:none", title: t("Unassigned"), value: null, colour: null },
     ];
-  }, [groupBy, state.labels, state.members]);
+  }, [groupBy, state.labels, state.members, t]);
 
   const laneOf = useMemo(() => {
     return (card: Card): string => {
@@ -297,14 +300,18 @@ export function Board({ state, filter, groupBy, apply, onOpenCard }: Props) {
                         apply({ kind: "list.rename", listId: lid, title })
                       }
                       onDeleteList={async (lid, count) => {
-                        const name = listById.get(lid)?.title ?? "this list";
+                        const name = listById.get(lid)?.title ?? t("this list");
                         const ok = await confirm({
-                          title: `Delete “${name}”?`,
+                          title: t("Delete “{name}”?", { name }),
                           description:
                             count > 0
-                              ? `Its ${count} card${count === 1 ? "" : "s"} go with it, and this cannot be undone. Archive the cards first if you might want them back.`
-                              : "This cannot be undone.",
-                          confirmLabel: "Delete list",
+                              ? pl(
+                                  count,
+                                  "Its {count} card goes with it, and this cannot be undone. Archive the cards first if you might want them back.",
+                                  "Its {count} cards go with it, and this cannot be undone. Archive the cards first if you might want them back.",
+                                )
+                              : t("This cannot be undone."),
+                          confirmLabel: t("Delete list"),
                           danger: true,
                         });
                         if (ok) apply({ kind: "list.delete", listId: lid });
@@ -323,11 +330,11 @@ export function Board({ state, filter, groupBy, apply, onOpenCard }: Props) {
                       type="button"
                       onClick={async () => {
                         const answer = await ask({
-                          title: "Add a list",
+                          title: t("Add a list"),
                           fields: [
-                            { name: "title", label: "List name", placeholder: "In review" },
+                            { name: "title", label: t("List name"), placeholder: "In review" },
                           ],
-                          confirmLabel: "Add list",
+                          confirmLabel: t("Add list"),
                         });
                         const title = answer?.title?.trim();
                         if (!title) return;
@@ -339,7 +346,7 @@ export function Board({ state, filter, groupBy, apply, onOpenCard }: Props) {
                         });
                       }}
                     >
-                      Add a list
+                      {t("Add a list")}
                     </button>
                   </div>
                 )}

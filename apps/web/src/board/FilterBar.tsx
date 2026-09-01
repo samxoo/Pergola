@@ -1,6 +1,7 @@
 import type { BoardState } from "@pergola/shared";
 import { avatarColor, hexFor, initials } from "../lib/labels.js";
 import { EMPTY, countVisible, isActive, type Due, type Filter } from "../lib/filters.js";
+import { useT } from "../lib/i18n.js";
 
 type Props = {
   state: BoardState;
@@ -19,6 +20,7 @@ const DUE_OPTIONS: { value: Due; label: string }[] = [
 ];
 
 export function FilterBar({ state, filter, onChange, archivedCount, onShowArchive }: Props) {
+  const t = useT();
   const active = isActive(filter);
   const { shown, total } = countVisible(state, filter);
 
@@ -35,12 +37,12 @@ export function FilterBar({ state, filter, onChange, archivedCount, onShowArchiv
       <input
         className="filter-text"
         value={filter.text}
-        placeholder="Filter cards"
-        aria-label="Filter cards by text"
+        placeholder={t("Filter cards")}
+        aria-label={t("Filter cards by text")}
         onChange={(e) => onChange({ ...filter, text: e.target.value })}
       />
 
-      <div className="filter-group" role="group" aria-label="Filter by label">
+      <div className="filter-group" role="group" aria-label={t("Filter by label")}>
         {state.labels.map((l) => {
           const on = filter.labelIds.includes(l.id);
           return (
@@ -59,7 +61,7 @@ export function FilterBar({ state, filter, onChange, archivedCount, onShowArchiv
         })}
       </div>
 
-      <div className="filter-group" role="group" aria-label="Filter by member">
+      <div className="filter-group" role="group" aria-label={t("Filter by member")}>
         {state.members.map((m) => {
           const on = filter.assigneeIds.includes(m.id);
           return (
@@ -82,12 +84,12 @@ export function FilterBar({ state, filter, onChange, archivedCount, onShowArchiv
       <select
         className="btn"
         value={filter.due}
-        aria-label="Filter by due date"
+        aria-label={t("Filter by due date")}
         onChange={(e) => onChange({ ...filter, due: e.target.value as Due })}
       >
         {DUE_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>
-            {o.label}
+            {t(o.label)}
           </option>
         ))}
       </select>
@@ -95,10 +97,10 @@ export function FilterBar({ state, filter, onChange, archivedCount, onShowArchiv
       {active && (
         <>
           <span className="filter-count mono">
-            {shown} of {total}
+            {t("{shown} of {total}", { shown, total })}
           </span>
           <button className="linkish" type="button" onClick={() => onChange(EMPTY)}>
-            Clear
+            {t("Clear")}
           </button>
         </>
       )}
@@ -107,7 +109,7 @@ export function FilterBar({ state, filter, onChange, archivedCount, onShowArchiv
 
       {archivedCount > 0 && (
         <button className="btn" type="button" onClick={onShowArchive}>
-          Archive <span className="mono">{archivedCount}</span>
+          {t("Archive")} <span className="mono">{archivedCount}</span>
         </button>
       )}
     </div>

@@ -14,6 +14,7 @@ import { useDialogs } from "../lib/Dialogs.js";
 import { Activity } from "./Activity.js";
 import { InlineEdit } from "../lib/InlineEdit.js";
 import { LABEL_NAMES, avatarColor, hexFor, initials } from "../lib/labels.js";
+import { useT, useDateLocale } from "../lib/i18n.js";
 
 type Props = {
   state: BoardState;
@@ -35,6 +36,8 @@ type Panel = "labels" | "members" | "dates" | "cover" | null;
  * live and teammates are moving things while you read.
  */
 export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props) {
+  const t = useT();
+  const locale = useDateLocale();
   const [panel, setPanel] = useState<Panel>(null);
   const { ask, confirm, tell } = useDialogs();
   const list = state.lists.find((l) => l.id === card.listId);
@@ -65,8 +68,8 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
       <aside className="drawer" role="dialog" aria-label={card.title}>
         <header className="drawer-head">
           <span className="mono card-no">PRG-{card.number}</span>
-          <span className="drawer-crumb">in {list?.title ?? "—"}</span>
-          <button className="icon-btn" type="button" onClick={onClose} aria-label="Close">
+          <span className="drawer-crumb">{t("in {list}", { list: list?.title ?? "—" })}</span>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label={t("Close")}>
             ×
           </button>
         </header>
@@ -77,10 +80,10 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
             onCommit={(title) => apply({ kind: "card.rename", cardId: card.id, title })}
             className="drawer-title-edit"
             multiline
-            ariaLabel="Card title"
+            ariaLabel={t("Card title")}
           >
             {(open) => (
-              <h2 className="drawer-title" onClick={open} title="Click to rename">
+              <h2 className="drawer-title" onClick={open} title={t("Click to rename")}>
                 {card.title}
               </h2>
             )}
@@ -122,10 +125,10 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
 
           {/* ---- actions ---- */}
           <div className="actions">
-            <button className="btn" type="button" onClick={() => toggle("labels")}>Labels</button>
-            <button className="btn" type="button" onClick={() => toggle("members")}>Members</button>
-            <button className="btn" type="button" onClick={() => toggle("dates")}>Dates</button>
-            <button className="btn" type="button" onClick={() => toggle("cover")}>Cover</button>
+            <button className="btn" type="button" onClick={() => toggle("labels")}>{t("Labels")}</button>
+            <button className="btn" type="button" onClick={() => toggle("members")}>{t("Members")}</button>
+            <button className="btn" type="button" onClick={() => toggle("dates")}>{t("Dates")}</button>
+            <button className="btn" type="button" onClick={() => toggle("cover")}>{t("Cover")}</button>
             <button
               className={`btn${meId && card.voterIds.includes(meId) ? " primary" : ""}`}
               type="button"
@@ -136,9 +139,9 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                   on: !(meId ? card.voterIds.includes(meId) : false),
                 })
               }
-              title="One vote each"
+              title={t("One vote each")}
             >
-              ▲ Vote{card.voterIds.length > 0 ? ` · ${card.voterIds.length}` : ""}
+              ▲ {t("Vote")}{card.voterIds.length > 0 ? ` · ${card.voterIds.length}` : ""}
             </button>
             <button
               className="btn"
@@ -147,14 +150,14 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                 apply({ kind: "card.archive", cardId: card.id, archived: true });
                 onClose();
               }}
-              title="Archiving can be undone with ⌘Z"
+              title={t("Archiving can be undone with ⌘Z")}
             >
-              Archive
+              {t("Archive")}
             </button>
           </div>
 
           {panel === "labels" && (
-            <Panel title="Labels">
+            <Panel title={t("Labels")}>
               {state.labels.map((l) => {
                 const on = card.labelIds.includes(l.id);
                 return (
@@ -178,12 +181,12 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                   </button>
                 );
               })}
-              <p className="panel-note">Double-click a label's text to name it.</p>
+              <p className="panel-note">{t("Double-click a label's text to name it.")}</p>
             </Panel>
           )}
 
           {panel === "members" && (
-            <Panel title="Members">
+            <Panel title={t("Members")}>
               {state.members.map((m) => {
                 const on = card.assigneeIds.includes(m.id);
                 return (
@@ -200,7 +203,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                     </span>
                     <span className="pick-name">
                       {m.name}
-                      {m.id === meId && <em> (you)</em>}
+                      {m.id === meId && <em> ({t("you")})</em>}
                     </span>
                     {on && <span className="tick">✓</span>}
                   </button>
@@ -210,10 +213,10 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
           )}
 
           {panel === "dates" && (
-            <Panel title="Dates">
+            <Panel title={t("Dates")}>
               <div className="date-row">
                 <label className="field inline">
-                  <span>Starts</span>
+                  <span>{t("Starts")}</span>
                   <input
                     type="datetime-local"
                     value={toLocal(card.startAt)}
@@ -228,7 +231,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                   />
                 </label>
                 <label className="field inline">
-                  <span>Due</span>
+                  <span>{t("Due")}</span>
                   <input
                     type="datetime-local"
                     value={toLocal(card.dueAt)}
@@ -251,14 +254,14 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                     apply({ kind: "card.setDates", cardId: card.id, startAt: null, dueAt: null })
                   }
                 >
-                  Clear both dates
+                  {t("Clear both dates")}
                 </button>
               )}
             </Panel>
           )}
 
           {panel === "cover" && (
-            <Panel title="Cover">
+            <Panel title={t("Cover")}>
               <div className="swatch-row">
                 {LABEL_NAMES.map((c) => (
                   <button
@@ -281,7 +284,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
           )}
 
           {/* ---- description ---- */}
-          <Section title="Description">
+          <Section title={t("Description")}>
             <InlineEdit
               value={card.descMd ?? ""}
               onCommit={(descMd) =>
@@ -289,7 +292,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
               }
               className="desc-edit"
               multiline
-              ariaLabel="Description"
+              ariaLabel={t("Description")}
             >
               {(open) =>
                 card.descMd ? (
@@ -298,7 +301,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                   </p>
                 ) : (
                   <button className="empty-slot" type="button" onClick={open}>
-                    Add a more detailed description
+                    {t("Add a more detailed description")}
                   </button>
                 )
               }
@@ -307,39 +310,39 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
 
           {/* ---- custom fields ---- */}
           <Section
-            title="Fields"
+            title={t("Fields")}
             action={
               <button
                 className="linkish"
                 type="button"
                 onClick={async () => {
                   const answer = await ask({
-                    title: "Add a field",
-                    description: "Fields belong to the board, and every card on it gets one.",
+                    title: t("Add a field"),
+                    description: t("Fields belong to the board, and every card on it gets one."),
                     fields: [
-                      { name: "name", label: "Field name", placeholder: "Effort" },
+                      { name: "name", label: t("Field name"), placeholder: "Effort" },
                       {
                         name: "type",
-                        label: "Type",
+                        label: t("Type"),
                         type: "select",
                         defaultValue: "text",
                         options: [
-                          { value: "text", label: "Text" },
-                          { value: "number", label: "Number" },
-                          { value: "date", label: "Date" },
-                          { value: "select", label: "Choice from a list" },
-                          { value: "checkbox", label: "Checkbox" },
+                          { value: "text", label: t("Text") },
+                          { value: "number", label: t("Number") },
+                          { value: "date", label: t("Date") },
+                          { value: "select", label: t("Choice from a list") },
+                          { value: "checkbox", label: t("Checkbox") },
                         ],
                       },
                       {
                         name: "options",
-                        label: "Choices",
+                        label: t("Choices"),
                         required: false,
                         placeholder: "Small, Medium, Large",
-                        hint: "Comma separated. Only used by a choice field.",
+                        hint: t("Comma separated. Only used by a choice field."),
                       },
                     ],
-                    confirmLabel: "Add field",
+                    confirmLabel: t("Add field"),
                   });
                   const name = answer?.name?.trim();
                   const type = answer?.type as CustomField["type"] | undefined;
@@ -357,12 +360,12 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                   });
                 }}
               >
-                Add
+                {t("Add")}
               </button>
             }
           >
             {state.fields.length === 0 && (
-              <p className="muted">None on this board yet.</p>
+              <p className="muted">{t("None on this board yet.")}</p>
             )}
             {state.fields.map((f) => (
               <FieldRow
@@ -374,10 +377,9 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                 }
                 onDelete={async () => {
                   const ok = await confirm({
-                    title: `Delete the field “${f.name}”?`,
-                    description:
-                      "It goes from every card on this board, and its values go with it.",
-                    confirmLabel: "Delete field",
+                    title: t("Delete the field “{name}”?", { name: f.name }),
+                    description: t("It goes from every card on this board, and its values go with it."),
+                    confirmLabel: t("Delete field"),
                     danger: true,
                   });
                   if (ok) apply({ kind: "field.delete", fieldId: f.id });
@@ -388,23 +390,23 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
 
           {/* ---- checklists ---- */}
           <Section
-            title="Checklists"
+            title={t("Checklists")}
             action={
               <button
                 className="linkish"
                 type="button"
                 onClick={async () => {
                   const answer = await ask({
-                    title: "Add a checklist",
+                    title: t("Add a checklist"),
                     fields: [
                       {
                         name: "title",
-                        label: "Checklist name",
-                        defaultValue: "Checklist",
+                        label: t("Checklist name"),
+                        defaultValue: t("Checklist"),
                         placeholder: "Acceptance",
                       },
                     ],
-                    confirmLabel: "Add checklist",
+                    confirmLabel: t("Add checklist"),
                   });
                   const title = answer?.title?.trim();
                   if (!title) return;
@@ -417,11 +419,11 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                   });
                 }}
               >
-                Add
+                {t("Add")}
               </button>
             }
           >
-            {checklists.length === 0 && <p className="muted">None yet.</p>}
+            {checklists.length === 0 && <p className="muted">{t("None yet.")}</p>}
             {checklists.map((cl) => {
               const items = itemsFor(state, cl.id);
               const done = items.filter((i) => i.done).length;
@@ -434,7 +436,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                         apply({ kind: "checklist.rename", checklistId: cl.id, title })
                       }
                       className="checklist-edit"
-                      ariaLabel="Checklist name"
+                      ariaLabel={t("Checklist name")}
                     >
                       {(open) => (
                         <strong onDoubleClick={open}>{cl.title}</strong>
@@ -446,12 +448,12 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                     <button
                       className="icon-btn"
                       type="button"
-                      aria-label={`Delete ${cl.title}`}
+                      aria-label={t("Delete {name}", { name: cl.title })}
                       onClick={async () => {
                         const ok = await confirm({
-                          title: `Delete “${cl.title}”?`,
-                          description: "Its items go with it, and this cannot be undone.",
-                          confirmLabel: "Delete checklist",
+                          title: t("Delete “{name}”?", { name: cl.title }),
+                          description: t("Its items go with it, and this cannot be undone."),
+                          confirmLabel: t("Delete checklist"),
                           danger: true,
                         });
                         if (ok) apply({ kind: "checklist.delete", checklistId: cl.id });
@@ -485,14 +487,14 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                         value={it.text}
                         onCommit={(text) => apply({ kind: "item.rename", itemId: it.id, text })}
                         className="item-edit"
-                        ariaLabel="Item text"
+                        ariaLabel={t("Item text")}
                       >
                         {(open) => <span onDoubleClick={open}>{it.text}</span>}
                       </InlineEdit>
                       <button
                         className="icon-btn"
                         type="button"
-                        aria-label={`Delete ${it.text}`}
+                        aria-label={t("Delete {name}", { name: it.text })}
                         onClick={() => apply({ kind: "item.delete", itemId: it.id })}
                       >
                         ×
@@ -517,7 +519,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
 
           {/* ---- attachments ---- */}
           <Section
-            title="Attachments"
+            title={t("Attachments")}
             action={
               <span className="attach-actions">
               <button
@@ -545,8 +547,8 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                         message?: string;
                       };
                       await tell({
-                        title: "That file was not accepted",
-                        description: message ?? "Try a smaller file.",
+                        title: t("That file was not accepted"),
+                        description: message ?? t("Try a smaller file."),
                       });
                       return;
                     }
@@ -556,25 +558,25 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                   picker.click();
                 }}
               >
-                Upload
+                {t("Upload")}
               </button>
               <button
                 className="linkish"
                 type="button"
                 onClick={async () => {
                   const answer = await ask({
-                    title: "Attach a link",
-                    description: "Or upload a file, if it lives on your machine.",
+                    title: t("Attach a link"),
+                    description: t("Or upload a file, if it lives on your machine."),
                     fields: [
-                      { name: "url", label: "URL", placeholder: "https://…" },
+                      { name: "url", label: t("URL"), placeholder: "https://…" },
                       {
                         name: "name",
-                        label: "Label",
+                        label: t("Label"),
                         required: false,
-                        placeholder: "What is it?",
+                        placeholder: t("What is it?"),
                       },
                     ],
-                    confirmLabel: "Attach",
+                    confirmLabel: t("Attach"),
                   });
                   const url = answer?.url?.trim();
                   if (!url) return;
@@ -587,12 +589,12 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                   });
                 }}
               >
-                Link
+                {t("Link")}
               </button>
               </span>
             }
           >
-            {attachments.length === 0 && <p className="muted">None.</p>}
+            {attachments.length === 0 && <p className="muted">{t("None.")}</p>}
             {attachments.map((a) => (
               <div key={a.id} className="attach-row">
                 {/* Untrusted destination: never let it reach back into this tab. */}
@@ -603,7 +605,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                 <button
                   className="icon-btn"
                   type="button"
-                  aria-label={`Remove ${a.name}`}
+                  aria-label={t("Remove {name}", { name: a.name })}
                   onClick={() => apply({ kind: "attachment.remove", attachmentId: a.id })}
                 >
                   ×
@@ -613,12 +615,12 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
           </Section>
 
           {/* ---- activity ---- */}
-          <Section title="Activity">
+          <Section title={t("Activity")}>
             <Activity boardId={state.id} cardId={card.id} cursor={state.seq} />
           </Section>
 
           {/* ---- comments ---- */}
-          <Section title="Comments">
+          <Section title={t("Comments")}>
             <AddComment
               onSend={(body) =>
                 apply({
@@ -629,7 +631,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                 })
               }
             />
-            {comments.length === 0 && <p className="muted">No comments yet.</p>}
+            {comments.length === 0 && <p className="muted">{t("No comments yet.")}</p>}
             {comments.map((cm) => {
               const author = memberById.get(cm.authorId);
               return (
@@ -637,22 +639,22 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                   <span
                     className="chip avatar"
                     style={{ background: avatarColor(cm.authorId) }}
-                    title={author?.name ?? "Someone"}
+                    title={author?.name ?? t("Someone")}
                   >
                     {initials(author?.name ?? author?.email ?? "?")}
                   </span>
                   <div className="comment-body">
                     <div className="comment-meta">
-                      <strong>{author?.name ?? "Someone"}</strong>
-                      <span className="muted mono">{when(cm.createdAt)}</span>
-                      {cm.editedAt && <span className="muted">edited</span>}
+                      <strong>{author?.name ?? t("Someone")}</strong>
+                      <span className="muted mono">{when(cm.createdAt, t, locale)}</span>
+                      {cm.editedAt && <span className="muted">{t("edited")}</span>}
                     </div>
                     <InlineEdit
                       value={cm.body}
                       onCommit={(body) => apply({ kind: "comment.edit", commentId: cm.id, body })}
                       className="comment-edit"
                       multiline
-                      ariaLabel="Comment"
+                      ariaLabel={t("Comment")}
                     >
                       {(open) => (
                         <p onDoubleClick={cm.authorId === meId ? open : undefined}>{cm.body}</p>
@@ -663,7 +665,7 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
                     <button
                       className="icon-btn"
                       type="button"
-                      aria-label="Delete comment"
+                      aria-label={t("Delete comment")}
                       onClick={() => apply({ kind: "comment.delete", commentId: cm.id })}
                     >
                       ×
@@ -717,12 +719,13 @@ function InlineEditableLabel({
   label: { name: string; color: string };
   onRename: (name: string) => void;
 }) {
+  const t = useT();
   return (
     <InlineEdit
       value={label.name}
       onCommit={onRename}
       className="label-name-edit"
-      ariaLabel="Label name"
+      ariaLabel={t("Label name")}
     >
       {(open) => (
         <span
@@ -750,6 +753,7 @@ function FieldRow({
   onSet: (value: string | null) => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   // An empty string means "no value", never the empty string itself — otherwise
   // clearing a field and typing nothing into it would be two different states.
   const set = (v: string) => onSet(v === "" ? null : v);
@@ -789,7 +793,7 @@ function FieldRow({
         />
       )}
 
-      <button className="icon-btn" type="button" aria-label={`Delete field ${field.name}`} onClick={onDelete}>
+      <button className="icon-btn" type="button" aria-label={t("Delete field {name}", { name: field.name })} onClick={onDelete}>
         ×
       </button>
     </div>
@@ -797,29 +801,31 @@ function FieldRow({
 }
 
 function AddItem({ onAdd }: { onAdd: (text: string) => void }) {
+  const t = useT();
   const [text, setText] = useState("");
   return (
     <form
       className="add-item"
       onSubmit={(e) => {
         e.preventDefault();
-        const t = text.trim();
-        if (!t) return;
-        onAdd(t);
+        const v = text.trim();
+        if (!v) return;
+        onAdd(v);
         setText(""); // adding several in a row is the common case
       }}
     >
       <input
         value={text}
-        placeholder="Add an item"
+        placeholder={t("Add an item")}
         onChange={(e) => setText(e.target.value)}
-        aria-label="Add an item"
+        aria-label={t("Add an item")}
       />
     </form>
   );
 }
 
 function AddComment({ onSend }: { onSend: (body: string) => void }) {
+  const t = useT();
   const [body, setBody] = useState("");
   return (
     <form
@@ -835,7 +841,7 @@ function AddComment({ onSend }: { onSend: (body: string) => void }) {
       <textarea
         rows={2}
         value={body}
-        placeholder="Write a comment"
+        placeholder={t("Write a comment")}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -843,15 +849,15 @@ function AddComment({ onSend }: { onSend: (body: string) => void }) {
             e.currentTarget.form?.requestSubmit();
           }
         }}
-        aria-label="Write a comment"
+        aria-label={t("Write a comment")}
       />
       <div className="add-comment-foot">
         <span className="muted">
           <kbd>⌘</kbd>
-          <kbd>Enter</kbd> to post
+          <kbd>Enter</kbd> {t("to post")}
         </span>
         <button className="btn primary" type="submit" disabled={!body.trim()}>
-          Comment
+          {t("Comment")}
         </button>
       </div>
     </form>
@@ -859,12 +865,14 @@ function AddComment({ onSend }: { onSend: (body: string) => void }) {
 }
 
 function DueChip({ dueAt }: { dueAt: string }) {
+  const t = useT();
+  const locale = useDateLocale();
   const due = new Date(dueAt);
   const overdue = due.getTime() < Date.now();
   return (
-    <span className={`chip due${overdue ? " overdue" : ""}`} title={due.toLocaleString()}>
-      {overdue ? "Overdue " : "Due "}
-      {due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+    <span className={`chip due${overdue ? " overdue" : ""}`} title={due.toLocaleString(locale)}>
+      {overdue ? t("Overdue") : t("Due")}{" "}
+      {due.toLocaleDateString(locale, { month: "short", day: "numeric" })}
     </span>
   );
 }
@@ -895,11 +903,15 @@ function hostOf(url: string): string {
   }
 }
 
-function when(iso: string): string {
+function when(
+  iso: string,
+  t: (k: string, p?: Record<string, string | number>) => string,
+  locale: string | undefined,
+): string {
   const then = new Date(iso).getTime();
   const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (mins < 1) return t("just now");
+  if (mins < 60) return t("{count}m ago", { count: mins });
+  if (mins < 60 * 24) return t("{count}h ago", { count: Math.round(mins / 60) });
+  return new Date(iso).toLocaleDateString(locale, { month: "short", day: "numeric" });
 }

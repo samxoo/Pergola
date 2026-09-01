@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Mark } from "./lib/Mark.js";
 import { hexFor } from "./lib/labels.js";
+import { useT, useDateLocale, LanguageToggle } from "./lib/i18n.js";
 
 type PublicCard = {
   id: string;
@@ -30,6 +31,8 @@ type PublicView = {
  * needs no account and gets no account.
  */
 export function PublicBoard({ boardId }: { boardId: string }) {
+  const t = useT();
+  const locale = useDateLocale();
   const [view, setView] = useState<PublicView | null>(null);
   const [missing, setMissing] = useState(false);
 
@@ -44,18 +47,18 @@ export function PublicBoard({ boardId }: { boardId: string }) {
   if (missing) {
     return (
       <div className="empty">
-        <h2>Nothing at this link</h2>
+        <h2>{t("Nothing at this link")}</h2>
         <p>
-          This board is private, or the link is wrong. Ask whoever shared it to publish it again.
+          {t("This board is private, or the link is wrong. Ask whoever shared it to publish it again.")}
         </p>
         <a className="btn" href="/">
-          Go to Pergola
+          {t("Go to Pergola")}
         </a>
       </div>
     );
   }
 
-  if (!view) return <div className="loading">Loading…</div>;
+  if (!view) return <div className="loading">{t("Loading…")}</div>;
 
   return (
     <div className="app">
@@ -66,12 +69,13 @@ export function PublicBoard({ boardId }: { boardId: string }) {
         </div>
         <span className="board-title">{view.title}</span>
         <span className="spacer" />
+        <LanguageToggle />
         <span className="status">
           <i />
-          Read only
+          {t("Read only")}
         </span>
         <a className="btn" href="/">
-          Sign in
+          {t("Sign in")}
         </a>
       </header>
 
@@ -114,7 +118,7 @@ export function PublicBoard({ boardId }: { boardId: string }) {
                           <span className="card-no mono">PRG-{c.number}</span>
                           {c.dueAt && (
                             <span className="badge due">
-                              {new Date(c.dueAt).toLocaleDateString(undefined, {
+                              {new Date(c.dueAt).toLocaleDateString(locale, {
                                 month: "short",
                                 day: "numeric",
                               })}

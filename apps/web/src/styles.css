@@ -1342,3 +1342,34 @@ kbd {
 .show-more:focus-visible { outline: 2px solid var(--beam); outline-offset: 2px; }
 
 .attach-actions { display: inline-flex; gap: 12px; }
+
+/* Language switch (EN / ქარ) — sits in the top bar and on the gate screens. */
+.langtoggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line, #d9dde3);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+.langopt {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 6px;
+  color: var(--muted, #6b7280);
+}
+.langopt:hover { color: var(--ink, #111827); }
+.langopt.on {
+  background: var(--accent, #0f766e);
+  color: #fff;
+}
+.gate-lang {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}

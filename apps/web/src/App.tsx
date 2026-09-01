@@ -17,12 +17,14 @@ import { useDialogs } from "./lib/Dialogs.js";
 import { avatarColor, initials } from "./lib/labels.js";
 import { useBoard } from "./lib/useBoard.js";
 import { SignIn } from "./SignIn.js";
+import { useT, usePlural, LanguageToggle } from "./lib/i18n.js";
 
 type BoardSummary = { id: string; title: string; seq: number; role: string };
 
 export function App() {
+  const t = useT();
   const { data: session, isPending } = authClient.useSession();
-  if (isPending) return <div className="loading">Loading…</div>;
+  if (isPending) return <div className="loading">{t("Loading…")}</div>;
   if (!session?.user) return <SignIn />;
   return (
     <Workspace
@@ -43,6 +45,8 @@ function Workspace({
   meName: string;
   meRole: string;
 }) {
+  const t = useT();
+  const pl = usePlural();
   const [boards, setBoards] = useState<BoardSummary[] | null>(null);
   const [boardId, setBoardId] = useState<string | null>(null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
@@ -85,10 +89,10 @@ function Workspace({
 
   const createBoard = async () => {
     const answer = await ask({
-      title: "New board",
-      description: "It starts with three lists and six labels, ready to rename.",
-      fields: [{ name: "title", label: "Board name", placeholder: "Roadmap" }],
-      confirmLabel: "Create board",
+      title: t("New board"),
+      description: t("It starts with three lists and six labels, ready to rename."),
+      fields: [{ name: "title", label: t("Board name"), placeholder: "Roadmap" }],
+      confirmLabel: t("Create board"),
     });
     const title = answer?.title?.trim();
     if (!title) return;
@@ -106,23 +110,23 @@ function Workspace({
   const invite = async () => {
     if (!boardId) return;
     const answer = await ask({
-      title: "Invite someone",
-      description: "They need an account on this instance already.",
+      title: t("Invite someone"),
+      description: t("They need an account on this instance already."),
       fields: [
-        { name: "email", label: "Email", type: "email", placeholder: "them@example.com" },
+        { name: "email", label: t("Email"), type: "email", placeholder: "them@example.com" },
         {
           name: "role",
-          label: "Role",
+          label: t("Role"),
           type: "select",
           defaultValue: "member",
           options: [
-            { value: "member", label: "Member — edits cards" },
-            { value: "admin", label: "Admin — edits the board itself" },
-            { value: "observer", label: "Observer — reads and comments" },
+            { value: "member", label: t("Member — edits cards") },
+            { value: "admin", label: t("Admin — edits the board itself") },
+            { value: "observer", label: t("Observer — reads and comments") },
           ],
         },
       ],
-      confirmLabel: "Send invite",
+      confirmLabel: t("Send invite"),
     });
     if (!answer) return;
 
@@ -133,8 +137,11 @@ function Workspace({
     if (found.length === 0) {
       // Say what to do about it rather than just reporting the absence.
       await tell({
-        title: "Nobody here uses that address",
-        description: `No account on this instance matches ${email}. Ask them to sign up first, then invite them.`,
+        title: t("Nobody here uses that address"),
+        description: t(
+          "No account on this instance matches {email}. Ask them to sign up first, then invite them.",
+          { email },
+        ),
       });
       return;
     }
@@ -147,8 +154,8 @@ function Workspace({
     if (res.ok) location.reload();
     else {
       await tell({
-        title: "That invite did not go through",
-        description: ((await res.json()) as { message?: string }).message ?? "Please try again.",
+        title: t("That invite did not go through"),
+        description: ((await res.json()) as { message?: string }).message ?? t("Please try again."),
       });
     }
   };
@@ -167,9 +174,10 @@ function Workspace({
       } catch (_err) {
         void _err;
         await tell({
-          title: "That file is not JSON",
-          description:
+          title: t("That file is not JSON"),
+          description: t(
             "Export your board from Trello with Menu → More → Print and export → Export as JSON, then pick the file it saves.",
+          ),
         });
         return;
       }
@@ -193,10 +201,10 @@ function Workspace({
           });
       if (!res.ok) {
         await tell({
-          title: "That import did not work",
+          title: t("That import did not work"),
           description:
             ((await res.json().catch(() => ({}))) as { message?: string }).message ??
-            "The file did not look like a Trello board export.",
+            t("The file did not look like a Trello board export."),
         });
         return;
       }
@@ -210,11 +218,26 @@ function Workspace({
       const { lists, cards, archived, labels, checklists, comments } = out.counts;
       void isOurs;
       await tell({
-        title: `Imported “${out.title}”`,
+        title: t("Imported “{title}”", { title: out.title }),
         description:
-          `${cards} cards across ${lists} lists, with ${labels} labels, ${checklists} checklists and ${comments} comments.` +
-          (archived ? ` ${archived} archived card${archived === 1 ? "" : "s"} went straight to the archive.` : "") +
-          (out.skipped.length ? ` Not carried over: ${out.skipped.join("; ")}.` : ""),
+          t(
+            "{cards} cards across {lists} lists, with {labels} labels, {checklists} checklists and {comments} comments.",
+            {
+              cards: cards ?? 0,
+              lists: lists ?? 0,
+              labels: labels ?? 0,
+              checklists: checklists ?? 0,
+              comments: comments ?? 0,
+            },
+          ) +
+          (archived
+            ? pl(
+                archived,
+                " {count} archived card went straight to the archive.",
+                " {count} archived cards went straight to the archive.",
+              )
+            : "") +
+          (out.skipped.length ? t(" Not carried over: {skipped}.", { skipped: out.skipped.join("; ") }) : ""),
       });
       const rows = (await (await fetch("/api/boards")).json()) as BoardSummary[];
       setBoards(rows);
@@ -228,22 +251,22 @@ function Workspace({
   const paletteActions: Action[] = [
     ...(boards ?? []).map((b) => ({
       id: `board:${b.id}`,
-      label: `Open board: ${b.title}`,
+      label: t("Open board: {title}", { title: b.title }),
       run: () => setBoardId(b.id),
     })),
-    { id: "new-board", label: "Create a board", run: () => void createBoard() },
-    { id: "import", label: "Import a board from Trello", run: importTrello },
-    ...(boardId ? [{ id: "duplicate", label: "Duplicate this board", run: () => void duplicateBoard() }] : []),
-    ...(boardId ? [{ id: "export", label: "Export this board as JSON", run: () => void exportBoard() }] : []),
-    ...(boardId ? [{ id: "invite", label: "Invite someone to this board", run: () => void invite() }] : []),
+    { id: "new-board", label: t("Create a board"), run: () => void createBoard() },
+    { id: "import", label: t("Import a board from Trello"), run: importTrello },
+    ...(boardId ? [{ id: "duplicate", label: t("Duplicate this board"), run: () => void duplicateBoard() }] : []),
+    ...(boardId ? [{ id: "export", label: t("Export this board as JSON"), run: () => void exportBoard() }] : []),
+    ...(boardId ? [{ id: "invite", label: t("Invite someone to this board"), run: () => void invite() }] : []),
     ...(archivedCount > 0
-      ? [{ id: "archive", label: `Open the archive (${archivedCount})`, run: () => setArchiveOpen(true) }]
+      ? [{ id: "archive", label: t("Open the archive ({count})", { count: archivedCount }), run: () => setArchiveOpen(true) }]
       : []),
-    ...(boardId ? [{ id: "settings", label: "Open board settings", run: () => setSettingsOpen(true) }] : []),
+    ...(boardId ? [{ id: "settings", label: t("Open board settings"), run: () => setSettingsOpen(true) }] : []),
     ...(runsTheInstance
-      ? [{ id: "admin", label: "Manage people and access", run: () => setAdminOpen(true) }]
+      ? [{ id: "admin", label: t("Manage people and access"), run: () => setAdminOpen(true) }]
       : []),
-    { id: "undo", label: "Undo the last change", hint: "⌘Z", run: undo },
+    { id: "undo", label: t("Undo the last change"), hint: "⌘Z", run: undo },
   ];
 
   /** Jump to a card from search: switch board if needed, then open its drawer. */
@@ -263,7 +286,7 @@ function Workspace({
     if (!boardId || !state) return;
     const res = await fetch(`/api/boards/${boardId}/export`);
     if (!res.ok) {
-      await tell({ title: "That export did not work", description: "Please try again." });
+      await tell({ title: t("That export did not work"), description: t("Please try again.") });
       return;
     }
     const blob = new Blob([await res.text()], { type: "application/json" });
@@ -279,23 +302,24 @@ function Workspace({
   const duplicateBoard = async () => {
     if (!boardId || !state) return;
     const answer = await ask({
-      title: `Duplicate “${state.title}”`,
-      description:
+      title: t("Duplicate “{title}”", { title: state.title }),
+      description: t(
         "Lists, labels, WIP limits and custom fields always come across. Cards are optional — leave them behind to use this board as a template.",
+      ),
       fields: [
-        { name: "title", label: "New board name", defaultValue: `${state.title} copy` },
+        { name: "title", label: t("New board name"), defaultValue: t("{title} copy", { title: state.title }) },
         {
           name: "withCards",
-          label: "Cards",
+          label: t("Cards"),
           type: "select",
           defaultValue: "no",
           options: [
-            { value: "no", label: "Structure only — no cards" },
-            { value: "yes", label: "Copy the cards too" },
+            { value: "no", label: t("Structure only — no cards") },
+            { value: "yes", label: t("Copy the cards too") },
           ],
         },
       ],
-      confirmLabel: "Duplicate",
+      confirmLabel: t("Duplicate"),
     });
     const title = answer?.title?.trim();
     if (!title) return;
@@ -306,7 +330,7 @@ function Workspace({
       body: JSON.stringify({ title, withCards: answer?.withCards === "yes" }),
     });
     if (!res.ok) {
-      await tell({ title: "That copy did not work", description: "Please try again." });
+      await tell({ title: t("That copy did not work"), description: t("Please try again.") });
       return;
     }
     const created = (await res.json()) as BoardSummary;
@@ -334,7 +358,7 @@ function Workspace({
             className="btn board-select"
             value={boardId ?? ""}
             onChange={(e) => setBoardId(e.target.value)}
-            aria-label="Board"
+            aria-label={t("Board")}
           >
             {boards.map((b) => (
               <option key={b.id} value={b.id}>
@@ -345,29 +369,29 @@ function Workspace({
         )}
 
         <button className="btn" type="button" onClick={createBoard}>
-          New board
+          {t("New board")}
         </button>
-        <button className="btn" type="button" onClick={importTrello} title="Import a Trello JSON export">
-          Import
+        <button className="btn" type="button" onClick={importTrello} title={t("Import a Trello JSON export")}>
+          {t("Import")}
         </button>
         {boardId && (
-          <button className="btn" type="button" onClick={duplicateBoard} title="Copy this board, with or without its cards">
-            Duplicate
+          <button className="btn" type="button" onClick={duplicateBoard} title={t("Copy this board, with or without its cards")}>
+            {t("Duplicate")}
           </button>
         )}
         {boardId && (
-          <button className="btn" type="button" onClick={exportBoard} title="Download this board as JSON">
-            Export
+          <button className="btn" type="button" onClick={exportBoard} title={t("Download this board as JSON")}>
+            {t("Export")}
           </button>
         )}
         {boardId && (
-          <button className="btn" type="button" onClick={() => setSettingsOpen(true)} title="Automation, webhooks, sharing and tokens">
-            Settings
+          <button className="btn" type="button" onClick={() => setSettingsOpen(true)} title={t("Automation, webhooks, sharing and tokens")}>
+            {t("Settings")}
           </button>
         )}
         {boardId && (
           <button className="btn" type="button" onClick={invite}>
-            Invite
+            {t("Invite")}
           </button>
         )}
 
@@ -391,9 +415,9 @@ function Workspace({
           className="btn"
           type="button"
           onClick={() => setPaletteOpen(true)}
-          title="Search and commands"
+          title={t("Search and commands")}
         >
-          Search <kbd>⌘K</kbd>
+          {t("Search")} <kbd>⌘K</kbd>
         </button>
 
         <Notifications
@@ -404,32 +428,34 @@ function Workspace({
           }}
         />
 
-        <button className="btn" type="button" onClick={undo} title="Undo (⌘Z)">
-          Undo
+        <button className="btn" type="button" onClick={undo} title={t("Undo (⌘Z)")}>
+          {t("Undo")}
         </button>
 
         <div
           className={`status ${pending > 0 ? "queued" : live ? "live" : "off"}`}
           title={
             pending > 0
-              ? `${pending} change${pending === 1 ? "" : "s"} saved here, waiting to sync`
+              ? pl(pending, "{count} change saved here, waiting to sync", "{count} changes saved here, waiting to sync")
               : live
-                ? "Live"
-                : "Reconnecting"
+                ? t("Live")
+                : t("Reconnecting")
           }
         >
           <i />
-          {pending > 0 ? `${pending} pending` : live ? "Live" : "Offline"}
+          {pending > 0 ? t("{count} pending", { count: pending }) : live ? t("Live") : t("Offline")}
         </div>
+
+        <LanguageToggle />
 
         {runsTheInstance && (
           <button
             className="btn"
             type="button"
             onClick={() => setAdminOpen(true)}
-            title="People, invitations and who may join"
+            title={t("People, invitations and who may join")}
           >
-            Admin
+            {t("Admin")}
           </button>
         )}
 
@@ -442,24 +468,24 @@ function Workspace({
             location.reload();
           }}
         >
-          Sign out
+          {t("Sign out")}
         </button>
       </header>
 
       {!boards ? (
-        <div className="loading">Loading…</div>
+        <div className="loading">{t("Loading…")}</div>
       ) : boards.length === 0 ? (
         <div className="empty">
-          <h2>Nothing here yet</h2>
-          <p>Make a board and it will come with three lists and six labels to start from.</p>
+          <h2>{t("Nothing here yet")}</h2>
+          <p>{t("Make a board and it will come with three lists and six labels to start from.")}</p>
           <button className="btn primary" type="button" onClick={createBoard}>
-            Create the first board
+            {t("Create the first board")}
           </button>
         </div>
       ) : state ? (
         <>
           <div className="viewbar">
-            <div className="viewtabs" role="tablist" aria-label="View">
+            <div className="viewtabs" role="tablist" aria-label={t("View")}>
               {(["board", "table", "calendar", "timeline"] as const).map((v) => (
                 <button
                   key={v}
@@ -470,26 +496,26 @@ function Workspace({
                   onClick={() => setView(v)}
                 >
                   {v === "board"
-                    ? "Board"
+                    ? t("Board")
                     : v === "table"
-                      ? "Table"
+                      ? t("Table")
                       : v === "calendar"
-                        ? "Calendar"
-                        : "Timeline"}
+                        ? t("Calendar")
+                        : t("Timeline")}
                 </button>
               ))}
             </div>
             {view === "board" && (
               <label className="groupby">
-                <span>Swimlanes</span>
+                <span>{t("Swimlanes")}</span>
                 <select
                   className="btn"
                   value={groupBy}
                   onChange={(e) => setGroupBy(e.target.value as GroupBy)}
                 >
-                  <option value="none">Off</option>
-                  <option value="label">By label</option>
-                  <option value="assignee">By member</option>
+                  <option value="none">{t("Off")}</option>
+                  <option value="label">{t("By label")}</option>
+                  <option value="assignee">{t("By member")}</option>
                 </select>
               </label>
             )}
@@ -531,7 +557,7 @@ function Workspace({
           )}
         </>
       ) : (
-        <div className="loading">Loading board…</div>
+        <div className="loading">{t("Loading board…")}</div>
       )}
 
       {state && openCard && (

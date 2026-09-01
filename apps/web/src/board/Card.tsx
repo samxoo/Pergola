@@ -6,6 +6,7 @@ import {
   type Card as CardModel,
 } from "@pergola/shared";
 import { avatarColor, hexFor, initials } from "../lib/labels.js";
+import { useT, useDateLocale } from "../lib/i18n.js";
 
 type Props = {
   state: BoardState;
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function Card({ state, card, index, columnId, onOpen }: Props) {
+  const t = useT();
   const { ref, isDragging } = useSortable({
     id: card.id,
     index,
@@ -42,7 +44,7 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
       className="card"
       data-dragging={isDragging}
       style={stale > 0 ? { opacity: 1 - stale * 0.55 } : undefined}
-      title={stale > 0.5 ? "Nothing has happened here in a while" : undefined}
+      title={stale > 0.5 ? t("Nothing has happened here in a while") : undefined}
       tabIndex={0}
       onClick={() => onOpen(card.id)}
       onKeyDown={(e) => {
@@ -79,20 +81,20 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
         {progress.total > 0 && (
           <span
             className={`badge mono${progress.done === progress.total ? " complete" : ""}`}
-            title="Checklist items"
+            title={t("Checklist items")}
           >
             ✓ {progress.done}/{progress.total}
           </span>
         )}
 
         {card.voterIds.length > 0 && (
-          <span className="badge mono" title={`${card.voterIds.length} vote(s)`}>
+          <span className="badge mono" title={t("{count} vote(s)", { count: card.voterIds.length })}>
             ▲ {card.voterIds.length}
           </span>
         )}
 
         {card.descMd && (
-          <span className="badge" title="Has a description" aria-label="Has a description">
+          <span className="badge" title={t("Has a description")} aria-label={t("Has a description")}>
             ≡
           </span>
         )}
@@ -118,6 +120,7 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
 }
 
 function Due({ dueAt }: { dueAt: string }) {
+  const locale = useDateLocale();
   const due = new Date(dueAt);
   const ms = due.getTime() - Date.now();
   const overdue = ms < 0;
@@ -126,9 +129,9 @@ function Due({ dueAt }: { dueAt: string }) {
   return (
     <span
       className={`badge due${overdue ? " overdue" : soon ? " soon" : ""}`}
-      title={due.toLocaleString()}
+      title={due.toLocaleString(locale)}
     >
-      {due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+      {due.toLocaleDateString(locale, { month: "short", day: "numeric" })}
     </span>
   );
 }

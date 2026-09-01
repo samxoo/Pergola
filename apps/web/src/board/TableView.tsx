@@ -8,6 +8,7 @@ import {
 } from "@pergola/shared";
 import { avatarColor, hexFor, initials } from "../lib/labels.js";
 import { matches, type Filter } from "../lib/filters.js";
+import { useT, useDateLocale } from "../lib/i18n.js";
 
 type Props = {
   state: BoardState;
@@ -23,6 +24,7 @@ type SortKey = "number" | "title" | "list" | "due";
  * Trello puts this behind Premium. It is a table.
  */
 export function TableView({ state, filter, onOpenCard }: Props) {
+  const t = useT();
   const [sort, setSort] = useState<SortKey>("number");
   const [desc, setDesc] = useState(false);
 
@@ -64,13 +66,13 @@ export function TableView({ state, filter, onOpenCard }: Props) {
       <table className="cardtable">
         <thead>
           <tr>
-            {head("number", "Card")}
-            {head("title", "Title")}
-            {head("list", "List")}
-            <th>Labels</th>
-            <th>Who</th>
-            {head("due", "Due")}
-            <th>Done</th>
+            {head("number", t("Card"))}
+            {head("title", t("Title"))}
+            {head("list", t("List"))}
+            <th>{t("Labels")}</th>
+            <th>{t("Who")}</th>
+            {head("due", t("Due"))}
+            <th>{t("Done")}</th>
             {state.fields.map((f) => (
               <th key={f.id}>{f.name}</th>
             ))}
@@ -80,7 +82,7 @@ export function TableView({ state, filter, onOpenCard }: Props) {
           {rows.length === 0 && (
             <tr>
               <td colSpan={7 + state.fields.length} className="muted table-empty">
-                No cards match the current filter.
+                {t("No cards match the current filter.")}
               </td>
             </tr>
           )}
@@ -162,11 +164,12 @@ function compare(a: Card, b: Card, key: SortKey, listOrder: Map<string, number>)
 }
 
 function Due({ dueAt }: { dueAt: string }) {
+  const locale = useDateLocale();
   const due = new Date(dueAt);
   const overdue = due.getTime() < Date.now();
   return (
-    <span className={`badge due${overdue ? " overdue" : ""}`} title={due.toLocaleString()}>
-      {due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+    <span className={`badge due${overdue ? " overdue" : ""}`} title={due.toLocaleString(locale)}>
+      {due.toLocaleDateString(locale, { month: "short", day: "numeric" })}
     </span>
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Mark } from "./lib/Mark.js";
 import { authClient } from "./lib/auth.js";
+import { useT, LanguageToggle } from "./lib/i18n.js";
 
 /**
  * The first screen anyone sees on a fresh instance.
@@ -9,6 +10,7 @@ import { authClient } from "./lib/auth.js";
  * OAuth app before its owner can get in.
  */
 export function SignIn() {
+  const t = useT();
   const [mode, setMode] = useState<"in" | "up">("in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -26,13 +28,13 @@ export function SignIn() {
           ? await authClient.signUp.email({ email, password, name: name.trim() || email.split("@")[0]! })
           : await authClient.signIn.email({ email, password });
       if (res.error) {
-        setError(res.error.message ?? "That did not work. Check the details and try again.");
+        setError(res.error.message ?? t("That did not work. Check the details and try again."));
         return;
       }
       // The session cookie is set; App re-renders on the session change.
       location.reload();
     } catch {
-      setError("Could not reach the server. Is it running?");
+      setError(t("Could not reach the server. Is it running?"));
     } finally {
       setBusy(false);
     }
@@ -40,6 +42,7 @@ export function SignIn() {
 
   return (
     <div className="gate">
+      <LanguageToggle className="gate-lang" />
       <form className="gate-card" onSubmit={submit}>
         <div className="gate-brand">
           <Mark size={30} />
@@ -47,24 +50,24 @@ export function SignIn() {
         </div>
         <p className="gate-lede">
           {mode === "up"
-            ? "Create the first account on this instance."
-            : "Sign in to your boards."}
+            ? t("Create the first account on this instance.")
+            : t("Sign in to your boards.")}
         </p>
 
         {mode === "up" && (
           <label className="field">
-            <span>Name</span>
+            <span>{t("Name")}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="name"
-              placeholder="How teammates will see you"
+              placeholder={t("How teammates will see you")}
             />
           </label>
         )}
 
         <label className="field">
-          <span>Email</span>
+          <span>{t("Email")}</span>
           <input
             type="email"
             required
@@ -75,7 +78,7 @@ export function SignIn() {
         </label>
 
         <label className="field">
-          <span>Password</span>
+          <span>{t("Password")}</span>
           <input
             type="password"
             required
@@ -84,7 +87,7 @@ export function SignIn() {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete={mode === "up" ? "new-password" : "current-password"}
           />
-          {mode === "up" && <em className="hint">At least 10 characters.</em>}
+          {mode === "up" && <em className="hint">{t("At least 10 characters.")}</em>}
         </label>
 
         {error && (
@@ -94,7 +97,7 @@ export function SignIn() {
         )}
 
         <button className="btn primary" type="submit" disabled={busy}>
-          {busy ? "Working…" : mode === "up" ? "Create account" : "Sign in"}
+          {busy ? t("Working…") : mode === "up" ? t("Create account") : t("Sign in")}
         </button>
 
         <button
@@ -105,7 +108,7 @@ export function SignIn() {
             setError(null);
           }}
         >
-          {mode === "in" ? "Create an account instead" : "I already have an account"}
+          {mode === "in" ? t("Create an account instead") : t("I already have an account")}
         </button>
       </form>
     </div>

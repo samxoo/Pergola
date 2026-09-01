@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { describe, type MutationBody } from "@pergola/shared";
 import { avatarColor, initials } from "../lib/labels.js";
+import { useT, useDateLocale } from "../lib/i18n.js";
 
 export type Entry = {
   id: string;
@@ -29,6 +30,8 @@ type Props = {
  * sync and undo.
  */
 export function Activity({ boardId, cardId, cursor }: Props) {
+  const t = useT();
+  const locale = useDateLocale();
   const [entries, setEntries] = useState<Entry[] | null>(null);
 
   useEffect(() => {
@@ -46,8 +49,8 @@ export function Activity({ boardId, cardId, cursor }: Props) {
     };
   }, [boardId, cardId, cursor]);
 
-  if (!entries) return <p className="muted">Loading…</p>;
-  if (entries.length === 0) return <p className="muted">Nothing has happened yet.</p>;
+  if (!entries) return <p className="muted">{t("Loading…")}</p>;
+  if (entries.length === 0) return <p className="muted">{t("Nothing has happened yet.")}</p>;
 
   return (
     <div className="activity">
@@ -56,17 +59,17 @@ export function Activity({ boardId, cardId, cursor }: Props) {
           <span
             className="chip avatar small"
             style={{ background: e.actorId ? avatarColor(e.actorId) : "var(--muted)" }}
-            title={e.actorName ?? "Someone"}
+            title={e.actorName ?? t("Someone")}
           >
             {initials(e.actorName ?? "?")}
           </span>
           <span className="activity-text">
-            <strong>{e.actorName ?? "Someone"}</strong> {describe(e.body)}
+            <strong>{e.actorName ?? t("Someone")}</strong> {describe(e.body)}
             {/* A rule acts on behalf of whoever set it off — say which. */}
-            {e.ruleName && <em className="via-rule"> via {e.ruleName}</em>}
+            {e.ruleName && <em className="via-rule"> {t("via {name}", { name: e.ruleName })}</em>}
           </span>
-          <span className="muted mono activity-when" title={new Date(e.createdAt).toLocaleString()}>
-            {when(e.createdAt)}
+          <span className="muted mono activity-when" title={new Date(e.createdAt).toLocaleString(locale)}>
+            {when(e.createdAt, t, locale)}
           </span>
         </div>
       ))}
@@ -74,10 +77,14 @@ export function Activity({ boardId, cardId, cursor }: Props) {
   );
 }
 
-function when(iso: string): string {
+function when(
+  iso: string,
+  t: (k: string, p?: Record<string, string | number>) => string,
+  locale: string | undefined,
+): string {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return "now";
+  if (mins < 1) return t("now");
   if (mins < 60) return `${mins}m`;
   if (mins < 1440) return `${Math.round(mins / 60)}h`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString(locale, { month: "short", day: "numeric" });
 }

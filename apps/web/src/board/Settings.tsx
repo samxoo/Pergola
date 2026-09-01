@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { describeRule, type Action, type BoardState, type Rule, type Trigger } from "@pergola/shared";
 import { useDialogs } from "../lib/Dialogs.js";
+import { useT, usePlural, useDateLocale } from "../lib/i18n.js";
 import { Activity } from "./Activity.js";
 
 type Props = {
@@ -23,6 +24,9 @@ type Hook = {
 type Token = { id: string; name: string; lastUsedAt: string | null; createdAt: string };
 
 export function Settings({ state, boardId, onClose }: Props) {
+  const t = useT();
+  const pl = usePlural();
+  const locale = useDateLocale();
   const [tab, setTab] = useState<Tab>("activity");
   const { ask, confirm, tell } = useDialogs();
 
@@ -58,45 +62,45 @@ export function Settings({ state, boardId, onClose }: Props) {
   const addRule = async () => {
     const listOptions = state.lists.map((l) => ({ value: l.id, label: l.title }));
     const answer = await ask({
-      title: "New rule",
-      description: "When something happens on this board, do something about it.",
+      title: t("New rule"),
+      description: t("When something happens on this board, do something about it."),
       fields: [
-        { name: "name", label: "Name", placeholder: "Ship it" },
+        { name: "name", label: t("Name"), placeholder: "Ship it" },
         {
           name: "on",
-          label: "When",
+          label: t("When"),
           type: "select",
           defaultValue: "checklist.completed",
           options: [
-            { value: "checklist.completed", label: "every checklist item is ticked" },
-            { value: "card.created", label: "a card is added" },
-            { value: "card.moved", label: "a card moves" },
-            { value: "card.labeled", label: "a label is added" },
+            { value: "checklist.completed", label: t("every checklist item is ticked") },
+            { value: "card.created", label: t("a card is added") },
+            { value: "card.moved", label: t("a card moves") },
+            { value: "card.labeled", label: t("a label is added") },
           ],
         },
         {
           name: "action",
-          label: "Then",
+          label: t("Then"),
           type: "select",
           defaultValue: "move",
           options: [
-            { value: "move", label: "move it to a list" },
-            { value: "archive", label: "archive it" },
-            { value: "setDue", label: "set a due date" },
-            { value: "comment", label: "post a comment" },
+            { value: "move", label: t("move it to a list") },
+            { value: "archive", label: t("archive it") },
+            { value: "setDue", label: t("set a due date") },
+            { value: "comment", label: t("post a comment") },
           ],
         },
         {
           name: "target",
-          label: "List",
+          label: t("List"),
           type: "select",
           required: false,
           defaultValue: listOptions[0]?.value ?? "",
           options: listOptions,
-          hint: "Used by “move to a list”.",
+          hint: t("Used by “move to a list”."),
         },
       ],
-      confirmLabel: "Create rule",
+      confirmLabel: t("Create rule"),
     });
     if (!answer?.name?.trim()) return;
 
@@ -116,7 +120,7 @@ export function Settings({ state, boardId, onClose }: Props) {
       body: JSON.stringify({ name: answer.name.trim(), enabled: true, trigger, actions: [action] }),
     });
     if (!res.ok) {
-      await tell({ title: "That rule was not accepted", description: "Check the fields and try again." });
+      await tell({ title: t("That rule was not accepted"), description: t("Check the fields and try again.") });
       return;
     }
     await loadRules();
@@ -126,10 +130,10 @@ export function Settings({ state, boardId, onClose }: Props) {
 
   const addHook = async () => {
     const answer = await ask({
-      title: "Add a webhook",
-      description: "Every change on this board is POSTed here, signed so you can verify it.",
-      fields: [{ name: "url", label: "Endpoint URL", placeholder: "https://example.com/hooks/pergola" }],
-      confirmLabel: "Add webhook",
+      title: t("Add a webhook"),
+      description: t("Every change on this board is POSTed here, signed so you can verify it."),
+      fields: [{ name: "url", label: t("Endpoint URL"), placeholder: "https://example.com/hooks/pergola" }],
+      confirmLabel: t("Add webhook"),
     });
     const url = answer?.url?.trim();
     if (!url) return;
@@ -139,13 +143,16 @@ export function Settings({ state, boardId, onClose }: Props) {
       body: JSON.stringify({ url }),
     });
     if (!res.ok) {
-      await tell({ title: "That endpoint was not accepted", description: "It needs to be a full URL." });
+      await tell({ title: t("That endpoint was not accepted"), description: t("It needs to be a full URL.") });
       return;
     }
     const { secret } = (await res.json()) as { secret: string };
     await tell({
-      title: "Copy the signing secret now",
-      description: `${secret}\n\nIt is stored hashed and cannot be shown again. Verify deliveries with HMAC-SHA256 over "timestamp.body", using the x-pergola-timestamp and x-pergola-signature headers.`,
+      title: t("Copy the signing secret now"),
+      description: t(
+        "{secret}\n\nIt is stored hashed and cannot be shown again. Verify deliveries with HMAC-SHA256 over \"timestamp.body\", using the x-pergola-timestamp and x-pergola-signature headers.",
+        { secret },
+      ),
     });
     await loadHooks();
   };
@@ -154,10 +161,10 @@ export function Settings({ state, boardId, onClose }: Props) {
 
   const addToken = async () => {
     const answer = await ask({
-      title: "New API token",
-      description: "Send it as an Authorization: Bearer header to use the whole API from a script.",
-      fields: [{ name: "name", label: "What is it for?", placeholder: "CI" }],
-      confirmLabel: "Create token",
+      title: t("New API token"),
+      description: t("Send it as an Authorization: Bearer header to use the whole API from a script."),
+      fields: [{ name: "name", label: t("What is it for?"), placeholder: "CI" }],
+      confirmLabel: t("Create token"),
     });
     const name = answer?.name?.trim();
     if (!name) return;
@@ -168,8 +175,8 @@ export function Settings({ state, boardId, onClose }: Props) {
     });
     const { token } = (await res.json()) as { token: string };
     await tell({
-      title: "Copy this token now",
-      description: `${token}\n\nOnly its hash is stored, so this is the one time it can be shown.`,
+      title: t("Copy this token now"),
+      description: t("{token}\n\nOnly its hash is stored, so this is the one time it can be shown.", { token }),
     });
     await loadTokens();
   };
@@ -189,34 +196,34 @@ export function Settings({ state, boardId, onClose }: Props) {
   return (
     <>
       <div className="scrim" onClick={onClose} aria-hidden="true" />
-      <aside className="drawer" role="dialog" aria-label="Board settings">
+      <aside className="drawer" role="dialog" aria-label={t("Board settings")}>
         <header className="drawer-head">
-          <strong>Settings</strong>
+          <strong>{t("Settings")}</strong>
           <span className="drawer-crumb">{state.title}</span>
-          <button className="icon-btn" type="button" onClick={onClose} aria-label="Close">
+          <button className="icon-btn" type="button" onClick={onClose} aria-label={t("Close")}>
             ×
           </button>
         </header>
 
         <div className="settings-tabs" role="tablist">
-          {(["activity", "automation", "webhooks", "share", "tokens"] as const).map((t) => (
+          {(["activity", "automation", "webhooks", "share", "tokens"] as const).map((tb) => (
             <button
-              key={t}
+              key={tb}
               role="tab"
               type="button"
-              aria-selected={tab === t}
-              className={`viewtab${tab === t ? " on" : ""}`}
-              onClick={() => setTab(t)}
+              aria-selected={tab === tb}
+              className={`viewtab${tab === tb ? " on" : ""}`}
+              onClick={() => setTab(tb)}
             >
-              {t === "activity"
-                ? "Activity"
-                : t === "automation"
-                  ? "Automation"
-                  : t === "webhooks"
-                    ? "Webhooks"
-                    : t === "share"
-                      ? "Share"
-                      : "Tokens"}
+              {tb === "activity"
+                ? t("Activity")
+                : tb === "automation"
+                  ? t("Automation")
+                  : tb === "webhooks"
+                    ? t("Webhooks")
+                    : tb === "share"
+                      ? t("Share")
+                      : t("Tokens")}
             </button>
           ))}
         </div>
@@ -225,10 +232,10 @@ export function Settings({ state, boardId, onClose }: Props) {
           {tab === "activity" && (
             <>
               <div className="section-head">
-                <h3>Everything that has happened</h3>
+                <h3>{t("Everything that has happened")}</h3>
               </div>
               <p className="muted">
-                Read straight from the mutation log, so it cannot disagree with the board.
+                {t("Read straight from the mutation log, so it cannot disagree with the board.")}
               </p>
               <Activity boardId={boardId} cursor={state.seq} />
             </>
@@ -237,16 +244,17 @@ export function Settings({ state, boardId, onClose }: Props) {
           {tab === "automation" && (
             <>
               <div className="section-head">
-                <h3>Rules</h3>
+                <h3>{t("Rules")}</h3>
                 <button className="linkish" type="button" onClick={addRule}>
-                  Add
+                  {t("Add")}
                 </button>
               </div>
-              {!rules && <p className="muted">Loading…</p>}
+              {!rules && <p className="muted">{t("Loading…")}</p>}
               {rules?.length === 0 && (
                 <p className="muted">
-                  No rules yet. A rule watches for something happening and does something about it —
-                  the sort of thing Trello meters and calls Butler.
+                  {t(
+                    "No rules yet. A rule watches for something happening and does something about it — the sort of thing Trello meters and calls Butler.",
+                  )}
                 </p>
               )}
               {rules?.map((r) => (
@@ -255,7 +263,7 @@ export function Settings({ state, boardId, onClose }: Props) {
                     <strong>{r.name}</strong>
                     <span className="muted">{describeRule(r)}</span>
                     <span className="muted mono">
-                      fired {r.fireCount} time{r.fireCount === 1 ? "" : "s"}
+                      {pl(r.fireCount, "fired {count} time", "fired {count} times")}
                     </span>
                   </div>
                   <div className="setting-actions">
@@ -272,7 +280,7 @@ export function Settings({ state, boardId, onClose }: Props) {
                           await loadRules();
                         }}
                       />
-                      <span>{r.enabled ? "On" : "Off"}</span>
+                      <span>{r.enabled ? t("On") : t("Off")}</span>
                     </label>
                     <button
                       className="linkish danger"
@@ -280,8 +288,8 @@ export function Settings({ state, boardId, onClose }: Props) {
                       onClick={async () => {
                         if (
                           await confirm({
-                            title: `Delete “${r.name}”?`,
-                            confirmLabel: "Delete rule",
+                            title: t("Delete “{name}”?", { name: r.name }),
+                            confirmLabel: t("Delete rule"),
                             danger: true,
                           })
                         ) {
@@ -290,7 +298,7 @@ export function Settings({ state, boardId, onClose }: Props) {
                         }
                       }}
                     >
-                      Delete
+                      {t("Delete")}
                     </button>
                   </div>
                 </div>
@@ -301,16 +309,17 @@ export function Settings({ state, boardId, onClose }: Props) {
           {tab === "webhooks" && (
             <>
               <div className="section-head">
-                <h3>Endpoints</h3>
+                <h3>{t("Endpoints")}</h3>
                 <button className="linkish" type="button" onClick={addHook}>
-                  Add
+                  {t("Add")}
                 </button>
               </div>
-              {!hooks && <p className="muted">Loading…</p>}
+              {!hooks && <p className="muted">{t("Loading…")}</p>}
               {hooks?.length === 0 && (
                 <p className="muted">
-                  Nothing subscribed. A webhook receives every change on this board as JSON, signed
-                  with its own secret.
+                  {t(
+                    "Nothing subscribed. A webhook receives every change on this board as JSON, signed with its own secret.",
+                  )}
                 </p>
               )}
               {hooks?.map((h) => (
@@ -320,9 +329,9 @@ export function Settings({ state, boardId, onClose }: Props) {
                     <span className={h.lastError ? "muted bad" : "muted"}>
                       {h.lastFiredAt
                         ? h.lastError
-                          ? `Last delivery failed: ${h.lastError}`
-                          : `Last delivery OK (${h.lastStatus})`
-                        : "Not fired yet"}
+                          ? t("Last delivery failed: {error}", { error: h.lastError })
+                          : t("Last delivery OK ({status})", { status: h.lastStatus ?? "" })
+                        : t("Not fired yet")}
                     </span>
                   </div>
                   <button
@@ -333,7 +342,7 @@ export function Settings({ state, boardId, onClose }: Props) {
                       await loadHooks();
                     }}
                   >
-                    Remove
+                    {t("Remove")}
                   </button>
                 </div>
               ))}
@@ -343,15 +352,16 @@ export function Settings({ state, boardId, onClose }: Props) {
           {tab === "share" && (
             <>
               <div className="section-head">
-                <h3>Public link</h3>
+                <h3>{t("Public link")}</h3>
               </div>
               <p className="muted">
-                A public board is readable by anyone with the link, without an account. Members and
-                comment threads are never included — a visitor sees the work, not the people.
+                {t(
+                  "A public board is readable by anyone with the link, without an account. Members and comment threads are never included — a visitor sees the work, not the people.",
+                )}
               </p>
               <div className="setting-row">
                 <div className="setting-main">
-                  <strong>{visibility === "public" ? "Anyone with the link" : "Members only"}</strong>
+                  <strong>{visibility === "public" ? t("Anyone with the link") : t("Members only")}</strong>
                   {visibility === "public" && <span className="mono small">{publicLink}</span>}
                 </div>
                 <button
@@ -359,11 +369,11 @@ export function Settings({ state, boardId, onClose }: Props) {
                   type="button"
                   onClick={() => setVisible(visibility === "public" ? "private" : "public")}
                 >
-                  {visibility === "public" ? "Make private" : "Publish"}
+                  {visibility === "public" ? t("Make private") : t("Publish")}
                 </button>
               </div>
               {visibility === null && (
-                <p className="muted">Publish to generate the link, or leave the board private.</p>
+                <p className="muted">{t("Publish to generate the link, or leave the board private.")}</p>
               )}
             </>
           )}
@@ -371,34 +381,36 @@ export function Settings({ state, boardId, onClose }: Props) {
           {tab === "tokens" && (
             <>
               <div className="section-head">
-                <h3>Your API tokens</h3>
+                <h3>{t("Your API tokens")}</h3>
                 <button className="linkish" type="button" onClick={addToken}>
-                  Add
+                  {t("Add")}
                 </button>
               </div>
               <p className="muted">
-                Tokens belong to you, not to a board, and reach every board you are a member of.
+                {t("Tokens belong to you, not to a board, and reach every board you are a member of.")}
               </p>
-              {!tokens && <p className="muted">Loading…</p>}
-              {tokens?.map((t) => (
-                <div key={t.id} className="setting-row">
+              {!tokens && <p className="muted">{t("Loading…")}</p>}
+              {tokens?.map((tk) => (
+                <div key={tk.id} className="setting-row">
                   <div className="setting-main">
-                    <strong>{t.name}</strong>
+                    <strong>{tk.name}</strong>
                     <span className="muted">
-                      {t.lastUsedAt
-                        ? `Last used ${new Date(t.lastUsedAt).toLocaleDateString()}`
-                        : "Never used"}
+                      {tk.lastUsedAt
+                        ? t("Last used {date}", {
+                            date: new Date(tk.lastUsedAt).toLocaleDateString(locale),
+                          })
+                        : t("Never used")}
                     </span>
                   </div>
                   <button
                     className="linkish danger"
                     type="button"
                     onClick={async () => {
-                      await fetch(`/api/tokens/${t.id}`, { method: "DELETE" });
+                      await fetch(`/api/tokens/${tk.id}`, { method: "DELETE" });
                       await loadTokens();
                     }}
                   >
-                    Revoke
+                    {t("Revoke")}
                   </button>
                 </div>
               ))}

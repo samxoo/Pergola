@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useDialogs } from "./lib/Dialogs.js";
 import { avatarColor, initials } from "./lib/labels.js";
+import { useT, usePlural, useDateLocale } from "./lib/i18n.js";
 // This sheet rides with the component rather than main.tsx: it is the only thing
 // that wants these rules, and App.tsx already has to import Admin to show it.
 import "./styles.admin.css";
@@ -45,6 +46,9 @@ type BoardRow = {
 type SignupMode = "open" | "invite" | "domain";
 type Access = { signupMode: SignupMode; allowedDomains: string[] };
 
+type T = (key: string, params?: Record<string, string | number>) => string;
+type PL = (count: number, one: string, many: string, params?: Record<string, string | number>) => string;
+
 const ROLES: { value: Role; label: string }[] = [
   { value: "member", label: "Member" },
   { value: "admin", label: "Admin" },
@@ -66,6 +70,9 @@ const ROLE_BLURB: Record<Role, string> = {
  * on it, and what they have made with it.
  */
 export function Admin({ meId, onClose }: Props) {
+  const t = useT();
+  const pl = usePlural();
+  const locale = useDateLocale();
   const [tab, setTab] = useState<Tab>("people");
   const { ask, confirm, tell } = useDialogs();
 
@@ -85,7 +92,7 @@ export function Admin({ meId, onClose }: Props) {
 
   /** The server's own words, if it left any. A failure is never swallowed. */
   const complain = async (res: Response, title: string) => {
-    let description = `The server returned ${res.status}.`;
+    let description = t("The server returned {status}.", { status: res.status });
     try {
       const body = (await res.json()) as { message?: unknown };
       if (typeof body.message === "string" && body.message) description = body.message;
@@ -100,7 +107,7 @@ export function Admin({ meId, onClose }: Props) {
   const loadPeople = async () => {
     const res = await fetch("/api/admin/people");
     if (!res.ok) {
-      await complain(res, "Could not read the people on this instance");
+      await complain(res, t("Could not read the people on this instance"));
       return;
     }
     setPeople((await res.json()) as Person[]);
@@ -109,7 +116,7 @@ export function Admin({ meId, onClose }: Props) {
   const loadInvites = async () => {
     const res = await fetch("/api/admin/invites");
     if (!res.ok) {
-      await complain(res, "Could not read the pending invites");
+      await complain(res, t("Could not read the pending invites"));
       return;
     }
     setInvites((await res.json()) as Invite[]);
@@ -118,7 +125,7 @@ export function Admin({ meId, onClose }: Props) {
   const loadBoards = async () => {
     const res = await fetch("/api/admin/boards");
     if (!res.ok) {
-      await complain(res, "Could not read the boards");
+      await complain(res, t("Could not read the boards"));
       return;
     }
     setBoards((await res.json()) as BoardRow[]);
@@ -127,7 +134,7 @@ export function Admin({ meId, onClose }: Props) {
   const loadAccess = async () => {
     const res = await fetch("/api/admin/settings");
     if (!res.ok) {
-      await complain(res, "Could not read the sign-up rules");
+      await complain(res, t("Could not read the sign-up rules"));
       return;
     }
     seedAccess((await res.json()) as Access);
@@ -169,10 +176,11 @@ export function Admin({ meId, onClose }: Props) {
   const setActive = async (p: Person, active: boolean) => {
     if (!active) {
       const ok = await confirm({
-        title: `Deactivate ${p.name}?`,
-        description:
+        title: t("Deactivate {name}?", { name: p.name }),
+        description: t(
           "It signs them out everywhere immediately and revokes every board they are on. Nothing they wrote is deleted, and activating them again gives all of it back.",
-        confirmLabel: "Deactivate",
+        ),
+        confirmLabel: t("Deactivate"),
         danger: true,
       });
       if (!ok) return;
@@ -180,7 +188,9 @@ export function Admin({ meId, onClose }: Props) {
     await patchPerson(
       p,
       { active },
-      active ? `${p.name} was not activated` : `${p.name} was not deactivated`,
+      active
+        ? t("{name} was not activated", { name: p.name })
+        : t("{name} was not deactivated", { name: p.name }),
     );
   };
 
@@ -188,20 +198,21 @@ export function Admin({ meId, onClose }: Props) {
 
   const createInvite = async () => {
     const answer = await ask({
-      title: "Invite someone",
-      description:
+      title: t("Invite someone"),
+      description: t(
         "This makes a one-time link. Nothing is emailed — a self-hosted box has no mail server — so you send it yourself.",
+      ),
       fields: [
-        { name: "email", label: "Email", type: "email", placeholder: "them@example.com" },
+        { name: "email", label: t("Email"), type: "email", placeholder: "them@example.com" },
         {
           name: "role",
-          label: "Role",
+          label: t("Role"),
           type: "select",
           defaultValue: "member",
-          options: ROLES.map((r) => ({ value: r.value, label: ROLE_BLURB[r.value] })),
+          options: ROLES.map((r) => ({ value: r.value, label: t(ROLE_BLURB[r.value]) })),
         },
       ],
-      confirmLabel: "Create invite",
+      confirmLabel: t("Create invite"),
     });
     const email = answer?.email?.trim().toLowerCase();
     if (!email) return;
@@ -212,7 +223,7 @@ export function Admin({ meId, onClose }: Props) {
       body: JSON.stringify({ email, role: answer?.role ?? "member" }),
     });
     if (!res.ok) {
-      await complain(res, "That invite was not created");
+      await complain(res, t("That invite was not created"));
       return;
     }
     const { url, expiresAt } = (await res.json()) as {
@@ -221,8 +232,11 @@ export function Admin({ meId, onClose }: Props) {
       expiresAt: string;
     };
     await tell({
-      title: "Copy this link now",
-      description: `${url}\n\nIt is shown once and cannot be shown again. Send it to ${email} yourself — there is no email server on a fresh instance. It works for one sign-up and expires ${inWords(expiresAt)}.`,
+      title: t("Copy this link now"),
+      description: t(
+        "{url}\n\nIt is shown once and cannot be shown again. Send it to {email} yourself — there is no email server on a fresh instance. It works for one sign-up and expires {when}.",
+        { url, email, when: inWords(expiresAt, t, pl) },
+      ),
     });
     await loadInvites();
   };
@@ -230,7 +244,7 @@ export function Admin({ meId, onClose }: Props) {
   const revokeInvite = async (i: Invite) => {
     const res = await fetch(`/api/admin/invites/${i.id}`, { method: "DELETE" });
     if (!res.ok) {
-      await complain(res, "That invite was not revoked");
+      await complain(res, t("That invite was not revoked"));
       return;
     }
     await loadInvites();
@@ -245,7 +259,7 @@ export function Admin({ meId, onClose }: Props) {
       body: JSON.stringify(patch),
     });
     if (!res.ok) {
-      await complain(res, "The sign-up rules were not changed");
+      await complain(res, t("The sign-up rules were not changed"));
       return;
     }
     // It answers with the settings as they now stand. If that ever stops being
@@ -265,32 +279,32 @@ export function Admin({ meId, onClose }: Props) {
   return (
     <>
       <div className="scrim" onClick={onClose} aria-hidden="true" />
-      <aside className="drawer admin" role="dialog" aria-label="Instance administration">
+      <aside className="drawer admin" role="dialog" aria-label={t("Instance administration")}>
         <header className="drawer-head">
-          <strong>Admin</strong>
-          <span className="drawer-crumb">Everyone and everything on this instance</span>
-          <button className="icon-btn" type="button" onClick={onClose} aria-label="Close">
+          <strong>{t("Admin")}</strong>
+          <span className="drawer-crumb">{t("Everyone and everything on this instance")}</span>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label={t("Close")}>
             ×
           </button>
         </header>
 
         <div className="settings-tabs" role="tablist">
-          {(["people", "invites", "boards", "access"] as const).map((t) => (
+          {(["people", "invites", "boards", "access"] as const).map((tb) => (
             <button
-              key={t}
+              key={tb}
               role="tab"
               type="button"
-              aria-selected={tab === t}
-              className={`viewtab${tab === t ? " on" : ""}`}
-              onClick={() => setTab(t)}
+              aria-selected={tab === tb}
+              className={`viewtab${tab === tb ? " on" : ""}`}
+              onClick={() => setTab(tb)}
             >
-              {t === "people"
-                ? "People"
-                : t === "invites"
-                  ? "Invites"
-                  : t === "boards"
-                    ? "Boards"
-                    : "Access"}
+              {tb === "people"
+                ? t("People")
+                : tb === "invites"
+                  ? t("Invites")
+                  : tb === "boards"
+                    ? t("Boards")
+                    : t("Access")}
             </button>
           ))}
         </div>
@@ -299,25 +313,26 @@ export function Admin({ meId, onClose }: Props) {
           {tab === "people" && (
             <>
               <div className="section-head">
-                <h3>Everyone here</h3>
+                <h3>{t("Everyone here")}</h3>
                 {people && (
                   <span className="muted mono tally">
                     {people.length}
-                    {deactivated > 0 ? ` · ${deactivated} off` : ""}
+                    {deactivated > 0 ? ` · ${t("{count} off", { count: deactivated })}` : ""}
                   </span>
                 )}
               </div>
               <p className="muted">
-                These are instance roles, not board roles. An owner or an admin sees this
-                console; a member only ever sees the boards they are on.
+                {t(
+                  "These are instance roles, not board roles. An owner or an admin sees this console; a member only ever sees the boards they are on.",
+                )}
               </p>
-              {!people && <p className="muted">Loading…</p>}
+              {!people && <p className="muted">{t("Loading…")}</p>}
               {people?.map((p) => {
                 const isMe = p.id === meId;
                 // A disabled control raises no tooltip, so the reason lives on the
                 // wrapper as well as on the controls themselves.
                 const why = isMe
-                  ? "You cannot change your own role or deactivate yourself. Ask another owner."
+                  ? t("You cannot change your own role or deactivate yourself. Ask another owner.")
                   : undefined;
                 return (
                   <div key={p.id} className={`setting-row person${p.active ? "" : " is-off"}`}>
@@ -331,16 +346,20 @@ export function Admin({ meId, onClose }: Props) {
                     <div className="setting-main">
                       <span className="row-name">
                         <strong>{p.name}</strong>
-                        {isMe && <span className="muted">you</span>}
-                        {!p.active && <span className="badge off">Deactivated</span>}
+                        {isMe && <span className="muted">{t("you")}</span>}
+                        {!p.active && <span className="badge off">{t("Deactivated")}</span>}
                       </span>
                       <span className="muted">{p.email}</span>
                       <span
                         className="muted mono small"
-                        title={`Joined ${new Date(p.createdAt).toLocaleDateString()}`}
+                        title={t("Joined {date}", {
+                          date: new Date(p.createdAt).toLocaleDateString(locale),
+                        })}
                       >
-                        {p.boardCount} board{p.boardCount === 1 ? "" : "s"} ·{" "}
-                        {p.lastSeenAt ? `seen ${ago(p.lastSeenAt)} ago` : "never signed in"}
+                        {pl(p.boardCount, "{count} board", "{count} boards")} ·{" "}
+                        {p.lastSeenAt
+                          ? t("seen {ago} ago", { ago: ago(p.lastSeenAt, t) })
+                          : t("never signed in")}
                       </span>
                     </div>
                     <div className="setting-actions" title={why}>
@@ -348,18 +367,18 @@ export function Admin({ meId, onClose }: Props) {
                         value={p.role}
                         disabled={isMe}
                         title={why}
-                        aria-label={`Instance role for ${p.name}`}
+                        aria-label={t("Instance role for {name}", { name: p.name })}
                         onChange={(e) =>
                           void patchPerson(
                             p,
                             { role: e.target.value as Role },
-                            `${p.name}'s role was not changed`,
+                            t("{name}'s role was not changed", { name: p.name }),
                           )
                         }
                       >
                         {ROLES.map((r) => (
-                          <option key={r.value} value={r.value} title={ROLE_BLURB[r.value]}>
-                            {r.label}
+                          <option key={r.value} value={r.value} title={t(ROLE_BLURB[r.value])}>
+                            {t(r.label)}
                           </option>
                         ))}
                       </select>
@@ -370,7 +389,7 @@ export function Admin({ meId, onClose }: Props) {
                         title={why}
                         onClick={() => void setActive(p, !p.active)}
                       >
-                        {p.active ? "Deactivate" : "Activate"}
+                        {p.active ? t("Deactivate") : t("Activate")}
                       </button>
                     </div>
                   </div>
@@ -382,17 +401,18 @@ export function Admin({ meId, onClose }: Props) {
           {tab === "invites" && (
             <>
               <div className="section-head">
-                <h3>Pending invites</h3>
+                <h3>{t("Pending invites")}</h3>
                 <button className="linkish" type="button" onClick={() => void createInvite()}>
-                  Invite
+                  {t("Invite")}
                 </button>
               </div>
               <p className="muted">
-                An invite is a one-time link, good for a single sign-up. Nothing is emailed, so
-                copy the link when it appears and send it however you already talk to people.
+                {t(
+                  "An invite is a one-time link, good for a single sign-up. Nothing is emailed, so copy the link when it appears and send it however you already talk to people.",
+                )}
               </p>
-              {!invites && <p className="muted">Loading…</p>}
-              {invites?.length === 0 && <p className="muted">Nobody is waiting to join.</p>}
+              {!invites && <p className="muted">{t("Loading…")}</p>}
+              {invites?.length === 0 && <p className="muted">{t("Nobody is waiting to join.")}</p>}
               {invites?.map((i) => {
                 const dead = hasExpired(i.expiresAt);
                 return (
@@ -400,15 +420,19 @@ export function Admin({ meId, onClose }: Props) {
                     <div className="setting-main">
                       <span className="row-name">
                         <strong>{i.email}</strong>
-                        <span className="badge">{i.role}</span>
-                        {dead && <span className="badge off">Expired</span>}
+                        <span className="badge">{t(i.role)}</span>
+                        {dead && <span className="badge off">{t("Expired")}</span>}
                       </span>
                       <span
                         className="muted"
-                        title={`Created ${new Date(i.createdAt).toLocaleString()}`}
+                        title={t("Created {date}", {
+                          date: new Date(i.createdAt).toLocaleString(locale),
+                        })}
                       >
-                        {dead ? "The link no longer works" : `Expires ${inWords(i.expiresAt)}`} ·
-                        invited by {i.invitedByName}
+                        {dead
+                          ? t("The link no longer works")
+                          : t("Expires {when}", { when: inWords(i.expiresAt, t, pl) })}{" "}
+                        · {t("invited by {name}", { name: i.invitedByName })}
                       </span>
                     </div>
                     <button
@@ -416,7 +440,7 @@ export function Admin({ meId, onClose }: Props) {
                       type="button"
                       onClick={() => void revokeInvite(i)}
                     >
-                      Revoke
+                      {t("Revoke")}
                     </button>
                   </div>
                 );
@@ -427,21 +451,24 @@ export function Admin({ meId, onClose }: Props) {
           {tab === "boards" && (
             <>
               <div className="section-head">
-                <h3>Every board</h3>
+                <h3>{t("Every board")}</h3>
                 {boards && <span className="muted mono tally">{boards.length}</span>}
               </div>
               <p className="muted">
-                Every board on the instance, including the ones you are not a member of. Titles
-                and counts only — this console does not open other people's cards.
+                {t(
+                  "Every board on the instance, including the ones you are not a member of. Titles and counts only — this console does not open other people's cards.",
+                )}
               </p>
               {publicBoards > 0 && (
                 <p className="admin-warn">
-                  {publicBoards} of these {boards?.length ?? 0} can be read by anyone with the
-                  link, without an account.
+                  {t("{count} of these {total} can be read by anyone with the link, without an account.", {
+                    count: publicBoards,
+                    total: boards?.length ?? 0,
+                  })}
                 </p>
               )}
-              {!boards && <p className="muted">Loading…</p>}
-              {boards?.length === 0 && <p className="muted">Nobody has made a board yet.</p>}
+              {!boards && <p className="muted">{t("Loading…")}</p>}
+              {boards?.length === 0 && <p className="muted">{t("Nobody has made a board yet.")}</p>}
               {boards?.map((b) => (
                 <div
                   key={b.id}
@@ -450,13 +477,15 @@ export function Admin({ meId, onClose }: Props) {
                   <div className="setting-main">
                     <span className="row-name">
                       <strong>{b.title}</strong>
-                      {b.visibility === "public" && <span className="badge public">Public</span>}
+                      {b.visibility === "public" && <span className="badge public">{t("Public")}</span>}
                     </span>
                     <span className="muted">{b.ownerName}</span>
                     <span className="muted mono small">
-                      {b.memberCount} member{b.memberCount === 1 ? "" : "s"} · {b.cardCount} card
-                      {b.cardCount === 1 ? "" : "s"} · started{" "}
-                      {new Date(b.createdAt).toLocaleDateString()}
+                      {pl(b.memberCount, "{count} member", "{count} members")} ·{" "}
+                      {pl(b.cardCount, "{count} card", "{count} cards")} ·{" "}
+                      {t("started {date}", {
+                        date: new Date(b.createdAt).toLocaleDateString(locale),
+                      })}
                     </span>
                   </div>
                 </div>
@@ -467,32 +496,32 @@ export function Admin({ meId, onClose }: Props) {
           {tab === "access" && (
             <>
               <div className="section-head">
-                <h3>How people get in</h3>
+                <h3>{t("How people get in")}</h3>
               </div>
-              {!access && <p className="muted">Loading…</p>}
+              {!access && <p className="muted">{t("Loading…")}</p>}
               {access && (
                 <>
                   <label className="field admin-field">
-                    <span>Sign-up</span>
+                    <span>{t("Sign-up")}</span>
                     <select
                       value={access.signupMode}
                       onChange={(e) =>
                         void saveAccess({ signupMode: e.target.value as SignupMode })
                       }
                     >
-                      <option value="open">Anyone with the link can sign up</option>
-                      <option value="invite">Invite only (recommended)</option>
-                      <option value="domain">Anyone with an email at an allowed domain</option>
+                      <option value="open">{t("Anyone with the link can sign up")}</option>
+                      <option value="invite">{t("Invite only (recommended)")}</option>
+                      <option value="domain">{t("Anyone with an email at an allowed domain")}</option>
                     </select>
                   </label>
                   <p className="muted">
-                    An instance on the public internet with open sign-up will collect strangers.
+                    {t("An instance on the public internet with open sign-up will collect strangers.")}
                   </p>
 
                   {access.signupMode === "domain" && (
                     <>
                       <label className="field admin-field">
-                        <span>Allowed domains</span>
+                        <span>{t("Allowed domains")}</span>
                         <input
                           value={domainDraft}
                           placeholder="acme.com, acme.co.uk"
@@ -505,7 +534,7 @@ export function Admin({ meId, onClose }: Props) {
                           }}
                         />
                         <em className="hint">
-                          Comma-separated, and only the part after the @.
+                          {t("Comma-separated, and only the part after the @.")}
                         </em>
                       </label>
                       <div className="admin-actions">
@@ -515,12 +544,12 @@ export function Admin({ meId, onClose }: Props) {
                           disabled={!domainsDirty}
                           onClick={() => void saveAccess({ allowedDomains: drafted })}
                         >
-                          Save domains
+                          {t("Save domains")}
                         </button>
                       </div>
                       {access.allowedDomains.length === 0 && (
                         <p className="bad">
-                          No domains listed, so nobody can sign up at all.
+                          {t("No domains listed, so nobody can sign up at all.")}
                         </p>
                       )}
                     </>
@@ -536,25 +565,25 @@ export function Admin({ meId, onClose }: Props) {
 }
 
 /** Same scale as the activity feed, so "3h" means the same thing everywhere. */
-function ago(iso: string): string {
+function ago(iso: string, t: T): string {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return "moments";
+  if (mins < 1) return t("moments");
   if (mins < 60) return `${mins}m`;
   if (mins < 1440) return `${Math.round(mins / 60)}h`;
   return `${Math.round(mins / 1440)}d`;
 }
 
 /** "in 6 days". Invites live in hours and days, so nothing finer earns its place. */
-function inWords(iso: string): string {
+function inWords(iso: string, t: T, pl: PL): string {
   const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
-  if (mins <= 0) return "now";
-  if (mins < 60) return `in ${mins} minute${mins === 1 ? "" : "s"}`;
+  if (mins <= 0) return t("now");
+  if (mins < 60) return pl(mins, "in {count} minute", "in {count} minutes");
   if (mins < 1440) {
     const hours = Math.round(mins / 60);
-    return `in ${hours} hour${hours === 1 ? "" : "s"}`;
+    return pl(hours, "in {count} hour", "in {count} hours");
   }
   const days = Math.round(mins / 1440);
-  return `in ${days} day${days === 1 ? "" : "s"}`;
+  return pl(days, "in {count} day", "in {count} days");
 }
 
 const hasExpired = (iso: string): boolean => new Date(iso).getTime() <= Date.now();

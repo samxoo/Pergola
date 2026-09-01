@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { cardsInList, type BoardState, type Card, type MutationBody } from "@pergola/shared";
 import { hexFor } from "../lib/labels.js";
 import { matches, type Filter } from "../lib/filters.js";
+import { useT, usePlural, useDateLocale } from "../lib/i18n.js";
 
 type Props = {
   state: BoardState;
@@ -20,6 +21,9 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
  * already had — a card due at 5pm should stay due at 5pm when it slips a week.
  */
 export function CalendarView({ state, filter, apply, onOpenCard }: Props) {
+  const t = useT();
+  const pl = usePlural();
+  const locale = useDateLocale();
   const [monthStart, setMonthStart] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -63,13 +67,13 @@ export function CalendarView({ state, filter, apply, onOpenCard }: Props) {
   return (
     <div className="calendar">
       <div className="cal-head">
-        <button className="btn" type="button" onClick={() => shiftMonth(-1)} aria-label="Previous month">
+        <button className="btn" type="button" onClick={() => shiftMonth(-1)} aria-label={t("Previous month")}>
           ‹
         </button>
         <strong className="cal-month">
-          {monthStart.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+          {monthStart.toLocaleDateString(locale, { month: "long", year: "numeric" })}
         </strong>
-        <button className="btn" type="button" onClick={() => shiftMonth(1)} aria-label="Next month">
+        <button className="btn" type="button" onClick={() => shiftMonth(1)} aria-label={t("Next month")}>
           ›
         </button>
         <button
@@ -80,18 +84,18 @@ export function CalendarView({ state, filter, apply, onOpenCard }: Props) {
             setMonthStart(new Date(d.getFullYear(), d.getMonth(), 1));
           }}
         >
-          Today
+          {t("Today")}
         </button>
         <span className="spacer" />
         <span className="muted">
-          {dated.length} card{dated.length === 1 ? "" : "s"} with a due date
+          {pl(dated.length, "{count} card with a due date", "{count} cards with a due date")}
         </span>
       </div>
 
       <div className="cal-grid" role="grid">
         {WEEKDAYS.map((d) => (
           <div key={d} className="cal-weekday">
-            {d}
+            {t(d)}
           </div>
         ))}
 

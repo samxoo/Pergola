@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { BoardState, Card as CardModel, List } from "@pergola/shared";
 import { useDialogs } from "../lib/Dialogs.js";
 import { InlineEdit } from "../lib/InlineEdit.js";
+import { useT } from "../lib/i18n.js";
 import { Card } from "./Card.js";
 
 type Props = {
@@ -43,6 +44,7 @@ export function Column({
   onSetWip,
   onOpenCard,
 }: Props) {
+  const t = useT();
   const { ask } = useDialogs();
   // Kanban's actual central idea, which Trello never shipped without a Power-Up.
   const overWip = list.wipLimit !== null && cards.length > list.wipLimit;
@@ -69,10 +71,10 @@ export function Column({
           value={list.title}
           onCommit={(title) => onRenameList(list.id, title)}
           className="column-edit"
-          ariaLabel={`Rename ${list.title}`}
+          ariaLabel={t("Rename {title}", { title: list.title })}
         >
           {(open) => (
-            <span className="column-title" onDoubleClick={open} title="Double-click to rename">
+            <span className="column-title" onDoubleClick={open} title={t("Double-click to rename")}>
               {list.title}
             </span>
           )}
@@ -82,25 +84,28 @@ export function Column({
           type="button"
           title={
             list.wipLimit === null
-              ? "Set a work-in-progress limit"
-              : `${cards.length} of ${list.wipLimit} — click to change`
+              ? t("Set a work-in-progress limit")
+              : t("{count} of {limit} — click to change", { count: cards.length, limit: list.wipLimit })
           }
           onPointerDown={(e) => e.stopPropagation()}
           onClick={async () => {
             const answer = await ask({
-              title: `Work-in-progress limit`,
-              description: `How many cards “${list.title}” should hold at once. The column turns red above it. Leave blank for no limit.`,
+              title: t("Work-in-progress limit"),
+              description: t(
+                "How many cards “{title}” should hold at once. The column turns red above it. Leave blank for no limit.",
+                { title: list.title },
+              ),
               fields: [
                 {
                   name: "limit",
-                  label: "Limit",
+                  label: t("Limit"),
                   type: "number",
                   required: false,
                   defaultValue: list.wipLimit === null ? "" : String(list.wipLimit),
-                  placeholder: "No limit",
+                  placeholder: t("No limit"),
                 },
               ],
-              confirmLabel: "Set limit",
+              confirmLabel: t("Set limit"),
             });
             if (!answer) return;
             const raw = (answer.limit ?? "").trim();
@@ -116,8 +121,8 @@ export function Column({
         <button
           className="list-del"
           type="button"
-          aria-label={`Delete list ${list.title}`}
-          title="Delete this list"
+          aria-label={t("Delete list {title}", { title: list.title })}
+          title={t("Delete this list")}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onDeleteList(list.id, cards.length)}
         >
@@ -141,8 +146,8 @@ export function Column({
 
       {hidden > 0 && (
         <button className="show-more" type="button" onClick={onShowMore}>
-          Show {Math.min(hidden, 60)} more
-          <span className="muted mono"> · {hidden} hidden</span>
+          {t("Show {count} more", { count: Math.min(hidden, 60) })}
+          <span className="muted mono"> · {t("{count} hidden", { count: hidden })}</span>
         </button>
       )}
 
@@ -152,6 +157,7 @@ export function Column({
 }
 
 function Composer({ onAdd }: { onAdd: (title: string) => void }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
 
@@ -166,7 +172,7 @@ function Composer({ onAdd }: { onAdd: (title: string) => void }) {
     return (
       <div className="composer">
         <button type="button" onClick={() => setOpen(true)}>
-          Add a card
+          {t("Add a card")}
         </button>
       </div>
     );
@@ -178,7 +184,7 @@ function Composer({ onAdd }: { onAdd: (title: string) => void }) {
         autoFocus
         rows={2}
         value={text}
-        placeholder="What needs doing?"
+        placeholder={t("What needs doing?")}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
@@ -196,10 +202,10 @@ function Composer({ onAdd }: { onAdd: (title: string) => void }) {
       />
       <div className="composer-hint">
         <span>
-          <kbd>Enter</kbd> to add
+          <kbd>Enter</kbd> {t("to add")}
         </span>
         <span>
-          <kbd>Esc</kbd> to close
+          <kbd>Esc</kbd> {t("to close")}
         </span>
       </div>
     </div>

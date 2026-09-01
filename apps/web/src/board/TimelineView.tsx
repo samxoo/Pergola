@@ -8,6 +8,7 @@ import {
 } from "@pergola/shared";
 import { hexFor } from "../lib/labels.js";
 import { matches, type Filter } from "../lib/filters.js";
+import { useT, usePlural, useDateLocale } from "../lib/i18n.js";
 
 type Props = {
   state: BoardState;
@@ -48,6 +49,9 @@ type Place = { from: number; to: number; bar: boolean };
  * invisible at 28px a day and would only make dragging feel loose.
  */
 export function TimelineView({ state, filter, apply, onOpenCard }: Props) {
+  const t = useT();
+  const pl = usePlural();
+  const locale = useDateLocale();
   const [anchor, setAnchor] = useState(windowStart);
   const [drag, setDrag] = useState<Drag | null>(null);
   // A drag ends in a click on the same button. Without this the drawer opens
@@ -63,10 +67,10 @@ export function TimelineView({ state, filter, apply, onOpenCard }: Props) {
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       const last = out[out.length - 1];
       if (last && last.key === key) last.days++;
-      else out.push({ key, label: d.toLocaleDateString(undefined, { month: "long", year: "numeric" }), days: 1 });
+      else out.push({ key, label: d.toLocaleDateString(locale, { month: "long", year: "numeric" }), days: 1 });
     }
     return out;
-  }, [days]);
+  }, [days, locale]);
 
   const labelById = useMemo(() => new Map(state.labels.map((l) => [l.id, l])), [state.labels]);
 
@@ -130,31 +134,31 @@ export function TimelineView({ state, filter, apply, onOpenCard }: Props) {
       style={vars({ "--tl-day": `${DAY_W}px`, "--tl-days": String(SPAN) })}
     >
       <div className="tl-head">
-        <button className="btn" type="button" onClick={() => shift(-PAGE)} aria-label="Earlier">
+        <button className="btn" type="button" onClick={() => shift(-PAGE)} aria-label={t("Earlier")}>
           ‹
         </button>
         <strong className="tl-range">
-          {anchor.toLocaleDateString(undefined, { day: "numeric", month: "short" })} –{" "}
-          {addDays(anchor, SPAN - 1).toLocaleDateString(undefined, {
+          {anchor.toLocaleDateString(locale, { day: "numeric", month: "short" })} –{" "}
+          {addDays(anchor, SPAN - 1).toLocaleDateString(locale, {
             day: "numeric",
             month: "short",
             year: "numeric",
           })}
         </strong>
-        <button className="btn" type="button" onClick={() => shift(PAGE)} aria-label="Later">
+        <button className="btn" type="button" onClick={() => shift(PAGE)} aria-label={t("Later")}>
           ›
         </button>
         <button className="btn" type="button" onClick={() => setAnchor(windowStart())}>
-          Today
+          {t("Today")}
         </button>
         <span className="spacer" />
         <span className="muted">
-          {total} card{total === 1 ? "" : "s"} scheduled
+          {pl(total, "{count} card scheduled", "{count} cards scheduled")}
         </span>
       </div>
 
       {total === 0 ? (
-        <p className="muted tl-empty">No card has a start or due date yet.</p>
+        <p className="muted tl-empty">{t("No card has a start or due date yet.")}</p>
       ) : (
         <div className="tl-scroll">
           <div className="tl-canvas">
@@ -185,7 +189,7 @@ export function TimelineView({ state, filter, apply, onOpenCard }: Props) {
                     data-weekend={d.getDay() === 0 || d.getDay() === 6 ? "" : undefined}
                     data-today={i === todayAt ? "" : undefined}
                   >
-                    {d.toLocaleDateString(undefined, { weekday: "narrow" })}
+                    {d.toLocaleDateString(locale, { weekday: "narrow" })}
                     <span className="tl-dom mono">{d.getDate()}</span>
                   </div>
                 ))}
@@ -214,7 +218,7 @@ export function TimelineView({ state, filter, apply, onOpenCard }: Props) {
                   const labelId = card.labelIds[0];
                   const label = labelId ? labelById.get(labelId) : undefined;
                   const hue = label ? hexFor(label.color) : "var(--beam)";
-                  const when = describe(dates);
+                  const when = describe(dates, t, locale);
 
                   return (
                     <div className="tl-row" key={card.id}>
@@ -321,13 +325,17 @@ function placement(d: Dates, anchor: Date): Place | null {
 }
 
 /** What a bar spans, for the tooltip and the screen reader. */
-function describe(d: Dates): string {
-  const s = d.startAt ? day(d.startAt) : null;
-  const e = d.dueAt ? day(d.dueAt) : null;
+function describe(
+  d: Dates,
+  t: (k: string, p?: Record<string, string | number>) => string,
+  locale: string | undefined,
+): string {
+  const s = d.startAt ? day(d.startAt, locale) : null;
+  const e = d.dueAt ? day(d.dueAt, locale) : null;
   if (s && e) return `${s} – ${e}`;
-  if (e) return `due ${e}`;
-  return s ? `starts ${s}` : "";
+  if (e) return t("due {date}", { date: e });
+  return s ? t("starts {date}", { date: s }) : "";
 }
 
-const day = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+const day = (iso: string, locale: string | undefined) =>
+  new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short" });

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useT } from "./i18n.js";
 
 export type Hit = {
   cardId: string;
@@ -33,6 +34,7 @@ type Props = {
  * to every action, not an alternate one.
  */
 export function Palette({ open, onClose, actions, onPick }: Props) {
+  const t = useT();
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [cursor, setCursor] = useState(0);
@@ -106,13 +108,13 @@ export function Palette({ open, onClose, actions, onPick }: Props) {
   return (
     <>
       <div className="scrim" onClick={onClose} aria-hidden="true" />
-      <div className="palette" role="dialog" aria-label="Command palette">
+      <div className="palette" role="dialog" aria-label={t("Command palette")}>
         <input
           ref={inputRef}
           className="palette-input"
           value={q}
-          placeholder="Search cards, or type a command"
-          aria-label="Search cards or run a command"
+          placeholder={t("Search cards, or type a command")}
+          aria-label={t("Search cards or run a command")}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
@@ -135,10 +137,10 @@ export function Palette({ open, onClose, actions, onPick }: Props) {
           {rows.length === 0 && (
             <p className="palette-empty">
               {q.trim().length < 2
-                ? "Type at least two characters to search."
+                ? t("Type at least two characters to search.")
                 : searching
-                  ? "Searching…"
-                  : `Nothing matches “${q.trim()}”.`}
+                  ? t("Searching…")
+                  : t("Nothing matches “{q}”.", { q: q.trim() })}
             </p>
           )}
 
@@ -153,7 +155,7 @@ export function Palette({ open, onClose, actions, onPick }: Props) {
                   onMouseEnter={() => setCursor(i)}
                   onClick={() => choose(i)}
                 >
-                  <span className="palette-kind mono">go</span>
+                  <span className="palette-kind mono">{t("go")}</span>
                   <span className="palette-label">{row.action.label}</span>
                   {row.action.hint && <span className="palette-hint mono">{row.action.hint}</span>}
                 </button>
@@ -171,7 +173,7 @@ export function Palette({ open, onClose, actions, onPick }: Props) {
                 <span className="palette-kind mono">PRG-{h.number}</span>
                 <span className="palette-label">
                   {h.title}
-                  {h.archived && <em className="palette-archived"> archived</em>}
+                  {h.archived && <em className="palette-archived"> {t("archived")}</em>}
                 </span>
                 <span className="palette-hint">
                   {h.boardTitle} · {h.listTitle}
@@ -184,13 +186,13 @@ export function Palette({ open, onClose, actions, onPick }: Props) {
         <div className="palette-foot mono">
           <span>
             <kbd>↑</kbd>
-            <kbd>↓</kbd> move
+            <kbd>↓</kbd> {t("move")}
           </span>
           <span>
-            <kbd>↵</kbd> open
+            <kbd>↵</kbd> {t("open")}
           </span>
           <span>
-            <kbd>esc</kbd> close
+            <kbd>esc</kbd> {t("close")}
           </span>
         </div>
       </div>

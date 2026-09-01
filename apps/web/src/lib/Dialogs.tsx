@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useT } from "./i18n.js";
 
 export type Field = {
   name: string;
@@ -112,6 +113,7 @@ function DialogHost({
   onDismiss: () => void;
   onSubmit: (values: Record<string, string>) => void;
 }) {
+  const t = useT();
   const cardRef = useRef<HTMLFormElement>(null);
   const fields = pending.kind === "ask" ? pending.opts.fields : [];
 
@@ -160,8 +162,8 @@ function DialogHost({
   const danger = pending.kind === "confirm" && pending.opts.danger;
   const confirmLabel =
     pending.kind === "tell"
-      ? "Close"
-      : (pending.opts.confirmLabel ?? (pending.kind === "confirm" ? "Confirm" : "Save"));
+      ? t("Close")
+      : (pending.opts.confirmLabel ?? (pending.kind === "confirm" ? t("Confirm") : t("Save")));
 
   const missing = fields.some((f) => f.required !== false && !values[f.name]?.trim());
 
@@ -219,7 +221,7 @@ function DialogHost({
         <div className="dialog-actions">
           {pending.kind !== "tell" && (
             <button className="btn" type="button" onClick={onDismiss}>
-              Cancel
+              {t("Cancel")}
             </button>
           )}
           <button

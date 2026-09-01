@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Mark } from "./lib/Mark.js";
+import { useT, LanguageToggle } from "./lib/i18n.js";
 
 /**
  * Accepting an invitation.
@@ -8,6 +9,7 @@ import { Mark } from "./lib/Mark.js";
  * you sign up as somebody else would not be an invite.
  */
 export function Join({ token }: { token: string }) {
+  const t = useT();
   const [invite, setInvite] = useState<{ email: string; role: string } | null>(null);
   const [dead, setDead] = useState(false);
   const [name, setName] = useState("");
@@ -26,17 +28,20 @@ export function Join({ token }: { token: string }) {
   if (dead) {
     return (
       <div className="empty">
-        <h2>That invitation is no longer good</h2>
-        <p>It has expired or already been used. Ask whoever invited you for a fresh link.</p>
-        <a className="btn" href="/">Go to the sign-in page</a>
+        <h2>{t("That invitation is no longer good")}</h2>
+        <p>{t("It has expired or already been used. Ask whoever invited you for a fresh link.")}</p>
+        <a className="btn" href="/">{t("Go to the sign-in page")}</a>
       </div>
     );
   }
 
-  if (!invite) return <div className="loading">Checking your invitation…</div>;
+  if (!invite) return <div className="loading">{t("Checking your invitation…")}</div>;
+
+  const roleWord = invite.role === "member" ? t("a member") : t(`an ${invite.role}`);
 
   return (
     <div className="gate">
+      <LanguageToggle className="gate-lang" />
       <form
         className="gate-card"
         onSubmit={async (e) => {
@@ -52,7 +57,7 @@ export function Join({ token }: { token: string }) {
             if (!res.ok) {
               setError(
                 ((await res.json().catch(() => ({}))) as { message?: string }).message ??
-                  "That did not work. Try again.",
+                  t("That did not work. Try again."),
               );
               return;
             }
@@ -67,27 +72,27 @@ export function Join({ token }: { token: string }) {
           <b>Pergola</b>
         </div>
         <p className="gate-lede">
-          You have been invited to join as {invite.role === "member" ? "a member" : `an ${invite.role}`}.
+          {t("You have been invited to join as {role}.", { role: roleWord })}
         </p>
 
         <label className="field">
-          <span>Email</span>
+          <span>{t("Email")}</span>
           <input value={invite.email} readOnly aria-readonly="true" />
-          <em className="hint">Fixed by the invitation.</em>
+          <em className="hint">{t("Fixed by the invitation.")}</em>
         </label>
 
         <label className="field">
-          <span>Name</span>
+          <span>{t("Name")}</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
-            placeholder="How teammates will see you"
+            placeholder={t("How teammates will see you")}
           />
         </label>
 
         <label className="field">
-          <span>Password</span>
+          <span>{t("Password")}</span>
           <input
             type="password"
             required
@@ -96,13 +101,13 @@ export function Join({ token }: { token: string }) {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
           />
-          <em className="hint">At least 10 characters.</em>
+          <em className="hint">{t("At least 10 characters.")}</em>
         </label>
 
         {error && <div className="gate-error" role="alert">{error}</div>}
 
         <button className="btn primary" type="submit" disabled={busy}>
-          {busy ? "Working…" : "Join"}
+          {busy ? t("Working…") : t("Join")}
         </button>
       </form>
     </div>
