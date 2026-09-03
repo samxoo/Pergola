@@ -678,13 +678,16 @@ const ka: Record<string, string> = {
   "This token is shown once. Set the assistant up now, or copy the token somewhere safe.":
     "ეს ტოკენი მხოლოდ ერთხელ ჩანს. დააყენეთ ასისტენტი ახლავე, ან შეინახეთ ტოკენი უსაფრთხო ადგილას.",
   "Other": "სხვა",
-  "Run this once in a terminal. It works in the Claude Code CLI and in the VS Code extension alike, for every project.":
-    "გაუშვით ერთხელ ტერმინალში. მუშაობს Claude Code-ის CLI-შიც და VS Code-ის გაფართოებაშიც, ყველა პროექტისთვის.",
+  "Paste this into any terminal — VS Code's own terminal is fine. Claude Code keeps its own list of MCP servers, shared by the CLI and the VS Code extension, and this command is the only way onto it; the VS Code Copilot button on the next tab does not reach it.":
+    "ჩასვით ეს ნებისმიერ ტერმინალში — VS Code-ის საკუთარი ტერმინალიც გამოდგება. Claude Code-ს MCP სერვერების საკუთარი სია აქვს, საერთო CLI-სა და VS Code-ის გაფართოებისთვის, და ამ სიაში მოხვედრის ერთადერთი გზა ეს ბრძანებაა; შემდეგი ჩანართის VS Code Copilot ღილაკი მას ვერ სწვდება.",
+  "Then, in Claude Code, type /mcp — pergola should be listed as connected. If it was already open, start a new session first.":
+    "შემდეგ Claude Code-ში აკრიფეთ /mcp — pergola დაკავშირებულად უნდა ჩანდეს. თუ უკვე გახსნილი იყო, ჯერ ახალი სესია დაიწყეთ.",
   "Copy": "კოპირება",
   "Copied": "დაკოპირდა",
   "Prefer a file? Put this in a .mcp.json at the root of a project to share it with that project only:":
     "ფაილი გირჩევნიათ? ჩადეთ ეს პროექტის ძირში .mcp.json-ში, რომ მხოლოდ იმ პროექტს გაუზიაროთ:",
-  "One click, for GitHub Copilot's agent mode in VS Code:": "ერთი დაწკაპუნებით, VS Code-ში GitHub Copilot-ის აგენტის რეჟიმისთვის:",
+  "One click, for GitHub Copilot's agent mode in VS Code. This is VS Code's own MCP list — Claude Code does not read it; use the Claude Code tab for that.":
+    "ერთი დაწკაპუნებით, VS Code-ში GitHub Copilot-ის აგენტის რეჟიმისთვის. ეს VS Code-ის საკუთარი MCP სიაა — Claude Code მას არ კითხულობს; ამისთვის Claude Code-ის ჩანართი გამოიყენეთ.",
   "Install in VS Code": "დაყენება VS Code-ში",
   "Or add this to .vscode/mcp.json:": "ან დაამატეთ ეს .vscode/mcp.json-ში:",
   "One click, in Cursor:": "ერთი დაწკაპუნებით, Cursor-ში:",

@@ -86,7 +86,7 @@ export function ConnectAI({ token, onClose }: Props) {
           {(
             [
               ["claude", "Claude Code"],
-              ["vscode", "VS Code"],
+              ["vscode", "VS Code Copilot"],
               ["cursor", "Cursor"],
               ["other", t("Other")],
             ] as const
@@ -106,11 +106,18 @@ export function ConnectAI({ token, onClose }: Props) {
 
         {client === "claude" && (
           <div className="connect-pane">
-            <p>{t("Run this once in a terminal. It works in the Claude Code CLI and in the VS Code extension alike, for every project.")}</p>
+            <p>
+              {t(
+                "Paste this into any terminal — VS Code's own terminal is fine. Claude Code keeps its own list of MCP servers, shared by the CLI and the VS Code extension, and this command is the only way onto it; the VS Code Copilot button on the next tab does not reach it.",
+              )}
+            </p>
             <pre className="connect-code">{claudeCommand}</pre>
             <div className="dialog-actions">
               <Copy what="claude" text={claudeCommand} />
             </div>
+            <p className="muted">
+              {t("Then, in Claude Code, type /mcp — pergola should be listed as connected. If it was already open, start a new session first.")}
+            </p>
             <p className="muted">{t("Prefer a file? Put this in a .mcp.json at the root of a project to share it with that project only:")}</p>
             <pre className="connect-code">{mcpJson}</pre>
             <div className="dialog-actions">
@@ -121,7 +128,7 @@ export function ConnectAI({ token, onClose }: Props) {
 
         {client === "vscode" && (
           <div className="connect-pane">
-            <p>{t("One click, for GitHub Copilot's agent mode in VS Code:")}</p>
+            <p>{t("One click, for GitHub Copilot's agent mode in VS Code. This is VS Code's own MCP list — Claude Code does not read it; use the Claude Code tab for that.")}</p>
             <div className="dialog-actions start">
               <a className="btn primary" href={vscodeLink}>
                 {t("Install in VS Code")}

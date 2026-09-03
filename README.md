@@ -310,8 +310,9 @@ read cards, create and move them, tick checklists and leave comments — as you,
 with your access, and every change logged under your name like any other.
 
 Open any board, *Settings → Tokens → Connect*. It mints a token and shows the
-one-liner for each client. For Claude Code, in the CLI or the VS Code
-extension:
+one-liner for each client. For Claude Code — the CLI and the VS Code extension
+share one list of servers, and this command is how a server gets onto it (the
+"Install in VS Code" link is for GitHub Copilot, which keeps a separate list):
 
 ```bash
 claude mcp add --transport http --scope user pergola https://your-host/api/mcp \
