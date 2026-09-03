@@ -143,7 +143,7 @@ export function Column({
             state={state}
             card={card}
             index={i}
-            columnId={list.id}
+            columnId={dndId}
             onOpen={onOpenCard}
           />
         ))}

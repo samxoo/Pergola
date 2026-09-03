@@ -14,6 +14,7 @@ type Props = {
   state: BoardState;
   card: CardModel;
   index: number;
+  /** The droppable id of the cell this card is rendered in — see Board.tsx. */
   columnId: string;
   onOpen: (id: string) => void;
 };
@@ -25,7 +26,12 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
     index,
     type: "item",
     accept: "item",
-    // `group` scopes the card to its column so dnd-kit knows which list it left.
+    /*
+     * `group` scopes the card to its cell so dnd-kit knows which list it left.
+     * It must be the cell's droppable id — the one Board.tsx keys its state by
+     * — because the sortable plugin compares the two to tell "dropped into a
+     * bay" from "dropped onto a card".
+     */
     group: columnId,
   });
 

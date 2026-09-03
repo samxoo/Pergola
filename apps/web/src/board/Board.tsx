@@ -104,6 +104,12 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
     };
   }, [groupBy]);
 
+  /**
+   * The lane that owns the lists. Only its columns are draggable, so a column's
+   * drag id is always a cell id from this lane.
+   */
+  const firstLaneKey = lanes[0]!.key;
+
   /** cellId -> how many cards that cell has been asked to reveal. */
   const [revealed, setRevealed] = useState<Record<string, number>>({});
 
@@ -134,7 +140,17 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
     return out;
   }, [fullCards, revealed]);
 
-  const committedOrder = useMemo(() => lists.map((l) => l.id), [lists]);
+  /*
+   * Column order, as the *cell ids* the columns are registered under — not the
+   * bare list ids. @dnd-kit's `move` looks the dragged column up in this array
+   * by its droppable id, and a column's droppable id is its top-lane cell id.
+   * With list ids here it found nothing, and dragging a column moved the DOM
+   * for a moment and committed nothing at all.
+   */
+  const committedOrder = useMemo(
+    () => lists.map((l) => cellId(firstLaneKey, l.id)),
+    [lists, firstLaneKey],
+  );
 
   /*
    * Cards reflow against local state while the pointer moves, and exactly one
@@ -167,8 +183,6 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
       ? null
       : (Object.keys(cardsByCell).find((id) => cardsByCell[id]?.includes(draggingCardId)) ?? null);
 
-  const firstLaneKey = lanes[0]!.key;
-
   return (
     <DragDropProvider
       onDragStart={(event) => {
@@ -191,11 +205,13 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
         if (source.type === "column") {
           const next = move(dragOrder ?? committedOrder, event);
           const index = next.indexOf(String(source.id));
-          if (index >= 0) {
+          const { listId } = splitCell(String(source.id));
+          const was = committedOrder.indexOf(String(source.id));
+          if (index >= 0 && index !== was && listById.has(listId)) {
             apply({
               kind: "list.move",
-              listId: String(source.id),
-              position: positionForIndex(lists, index, String(source.id)),
+              listId,
+              position: positionForIndex(lists, index, listId),
             });
           }
           return clearDrag();
@@ -221,8 +237,15 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
           .filter((c): c is NonNullable<typeof c> => Boolean(c));
         const position = positionForIndex(siblings, index, cardId);
 
+        /*
+         * Measured against the order that was *committed*, not the reflowed one:
+         * in `next` the card is at `index` by construction, so comparing there
+         * called every reorder within a list a no-op and never saved it.
+         */
         const stayedPut =
-          current && current.listId === listId && siblings[index]?.id === cardId;
+          current &&
+          current.listId === listId &&
+          (committedCards[cell] ?? []).indexOf(cardId) === index;
         if (!stayedPut) {
           apply({ kind: "card.move", cardId, toListId: listId, position });
         }
@@ -267,7 +290,8 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
               )}
 
               <div className="board">
-                {order.map((listId, index) => {
+                {order.map((cell, index) => {
+                  const { listId } = splitCell(cell);
                   const list = listById.get(listId);
                   if (!list) return null;
                   const id = cellId(lane.key, listId);
