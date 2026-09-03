@@ -57,6 +57,9 @@ export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props)
   const attachments = attachmentsFor(state, card.id);
   const threads = commentThreads(state, card.id);
   const memberById = new Map(state.members.map((m) => [m.id, m]));
+  // A member's current name first; the name recorded at creation if they left.
+  const maker = card.createdBy ? memberById.get(card.createdBy) : undefined;
+  const makerName = maker ? maker.name || maker.email : card.createdByName;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -787,6 +790,37 @@ export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props)
                 <Activity boardId={state.id} cardId={card.id} cursor={state.seq} />
               </div>
             )}
+
+            {/* Where it all started: who made the card, and when. */}
+            <div className="side-origin">
+              <span
+                className="chip avatar small"
+                style={{ background: card.createdBy ? avatarColor(card.createdBy) : "var(--muted)" }}
+                aria-hidden="true"
+              >
+                {initials(makerName ?? "?")}
+              </span>
+              <span className="muted">
+                {makerName
+                  ? t("Created by {name}", { name: makerName })
+                  : t("Created by someone no longer here")}
+                {card.createdAt && (
+                  <>
+                    {" · "}
+                    <time
+                      dateTime={card.createdAt}
+                      title={new Date(card.createdAt).toLocaleString(locale)}
+                    >
+                      {new Date(card.createdAt).toLocaleDateString(locale, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </time>
+                  </>
+                )}
+              </span>
+            </div>
           </aside>
         </div>
       </aside>

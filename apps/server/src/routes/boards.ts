@@ -189,7 +189,7 @@ export const boards = new Hono<Env>()
     ]);
 
     const cardIds = cardRows.map((r) => r.id);
-    const [labelLinks, assigneeLinks, voteLinks, activity, fieldValues, checklists] =
+    const [labelLinks, assigneeLinks, voteLinks, activity, makers, fieldValues, checklists] =
       await Promise.all([
       cardIds.length
         ? db.select().from(cardLabel).where(inArray(cardLabel.cardId, cardIds))
@@ -212,6 +212,21 @@ export const boards = new Hono<Env>()
           and(eq(mutation.boardId, id), sql`${mutation.payload}->>'cardId' is not null`),
         )
         .groupBy(sql`${mutation.payload}->>'cardId'`),
+      /*
+       * Who made each card, from the same log: its card.create entry. The name
+       * is joined here rather than looked up among the members, because the
+       * person who made a card may have left the board since.
+       */
+      db
+        .select({
+          cardId: sql<string>`${mutation.payload}->>'cardId'`,
+          actorId: mutation.actorId,
+          actorName: user.name,
+          at: mutation.createdAt,
+        })
+        .from(mutation)
+        .leftJoin(user, eq(user.id, mutation.actorId))
+        .where(and(eq(mutation.boardId, id), eq(mutation.kind, "card.create"))),
       cardIds.length
         ? db.select().from(customFieldValue).where(inArray(customFieldValue.cardId, cardIds))
         : [],
@@ -253,6 +268,7 @@ export const boards = new Hono<Env>()
     const assigneesByCard = group(assigneeLinks, (r) => r.cardId, (r) => r.userId);
     const votersByCard = group(voteLinks, (r) => r.cardId, (r) => r.userId);
     const lastActivity = new Map(activity.map((a) => [a.cardId, a.at]));
+    const makerOf = new Map(makers.map((m) => [m.cardId, m]));
     const fieldsByCard = new Map<string, Record<string, string>>();
     for (const v of fieldValues) {
       const bag = fieldsByCard.get(v.cardId) ?? {};
@@ -289,6 +305,9 @@ export const boards = new Hono<Env>()
         fields: fieldsByCard.get(r.id) ?? {},
         voterIds: votersByCard.get(r.id) ?? [],
         lastActivityAt: lastActivity.get(r.id) ?? r.createdAt.toISOString(),
+        createdBy: makerOf.get(r.id)?.actorId ?? null,
+        createdByName: makerOf.get(r.id)?.actorName ?? null,
+        createdAt: (makerOf.get(r.id)?.at ?? r.createdAt).toISOString(),
       })),
       checklists: checklists.map((cl) => ({
         id: cl.id,

@@ -46,6 +46,14 @@ export type Card = {
    * the point of the feature — stale work should look stale.
    */
   lastActivityAt: string | null;
+  /**
+   * Who made the card, and when — from its creation entry in the mutation log.
+   * The id is null for a card that arrived by import, or whose maker's account
+   * is gone; the name survives the maker leaving the board.
+   */
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: string | null;
 };
 
 export type CustomField = {
@@ -186,6 +194,9 @@ export function reduce(state: BoardState, body: MutationBody, meta: Meta): Board
             fields: {},
             voterIds: [],
             lastActivityAt: meta.at,
+            createdBy: meta.actorId,
+            createdByName: null,
+            createdAt: meta.at,
           },
         ],
       };

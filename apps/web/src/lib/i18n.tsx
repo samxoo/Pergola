@@ -357,6 +357,8 @@ const ka: Record<string, string> = {
   "owner": "მფლობელი",
   "observer": "დამკვირვებელი",
   "Created {date}": "შეიქმნა {date}",
+  "Created by {name}": "შექმნა {name}-მ",
+  "Created by someone no longer here": "შექმნა ვიღაცამ, ვინც აქ აღარ არის",
   "{count} off": "{count} გამორთ.",
   "moments": "წამები",
   "now": "ახლა",
