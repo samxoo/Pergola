@@ -15,7 +15,8 @@ import {
 import { commit } from "../mutations/commit.js";
 import { createStorage } from "../storage/adapter.js";
 
-const storage = createStorage();
+/** Shared with the MCP tools, which hand files to an assistant the same way. */
+export const storage = createStorage();
 
 /** Big enough for a design mock or a PDF, small enough to hold in memory. */
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -24,7 +25,7 @@ const MAX_BYTES = 10 * 1024 * 1024;
 const ENVELOPE = 64 * 1024;
 
 /** The prefix that marks an attachment as ours rather than someone's link. */
-const FILE_URL = "/api/files/";
+export const FILE_URL = "/api/files/";
 
 /**
  * The name is the caller's, and it is headed for a page and for a header.

@@ -324,9 +324,12 @@ you changed"*. The endpoint is `/api/mcp`, Streamable HTTP, stateless, so it
 runs on a serverless host as happily as on a container. Revoking the token
 disconnects the assistant.
 
-Tools: `list_boards`, `my_cards`, `get_board`, `get_card`, `search_cards`,
-`create_card`, `update_card`, `move_card`, `add_comment`, `add_checklist`,
-`check_item`, `archive_card`. Cards can be named by key (`PRG-12`) or id,
+Tools: `list_boards`, `my_cards`, `get_board`, `get_card`, `get_attachment`,
+`search_cards`, `create_card`, `update_card`, `move_card`, `add_comment`,
+`add_checklist`, `check_item`, `archive_card`. `get_attachment` hands over the
+file itself — an image as an image, a spreadsheet or Word document as its
+text, a PDF as a document — so an assistant can look at a screenshot or a
+stock list on a card, not just read that one is there. Cards can be named by key (`PRG-12`) or id,
 lists by title, people by `me`, email or name.
 
 ## Webhooks

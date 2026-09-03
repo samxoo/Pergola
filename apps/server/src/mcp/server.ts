@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
+import ExcelJS from "exceljs";
+import mammoth from "mammoth";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -23,8 +25,9 @@ import {
 } from "../auth/guard.js";
 import { boardsFor, searchCards, snapshot } from "../boards/read.js";
 import { db } from "../db/index.js";
-import { board, boardMember, card, cardAssignee, list } from "../db/schema.js";
+import { attachment, board, boardMember, card, cardAssignee, list } from "../db/schema.js";
 import { Stale } from "../mutations/handlers.js";
+import { FILE_URL, storage } from "../routes/files.js";
 
 /**
  * Pergola as tools.
@@ -119,9 +122,69 @@ function detail(state: BoardState, c: Card) {
       })),
     attachments: state.attachments
       .filter((a) => a.cardId === c.id)
-      .map((a) => ({ id: a.id, name: a.name, url: a.url })),
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        kind: a.url.startsWith(FILE_URL) ? kindOf(a.name) : "link",
+        ...(a.url.startsWith(FILE_URL) ? { view: "get_attachment" } : { url: a.url }),
+      })),
     fields: Object.entries(c.fields).map(([id, value]) => ({ field: fieldName(id), value })),
   };
+}
+
+/** What a file is, from its name — enough to know whether get_attachment can show it. */
+function kindOf(name: string): "image" | "pdf" | "text" | "spreadsheet" | "document" | "file" {
+  const ext = extOf(name);
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif"].includes(ext)) return "image";
+  if (ext === "pdf") return "pdf";
+  if (["xlsx", "xlsm", "xls"].includes(ext)) return "spreadsheet";
+  if (ext === "docx") return "document";
+  if (["txt", "md", "csv", "tsv", "json", "log", "yaml", "yml", "xml", "html", "ts", "js", "py", "sql"].includes(ext)) return "text";
+  return "file";
+}
+
+const extOf = (name: string) => name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
+
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/**
+ * A workbook as text, one block per sheet, tab-separated.
+ *
+ * People attach spreadsheets to cards all the time — a stock count, a list of
+ * SKUs — and the bytes of one mean nothing to a model. The cells do. Capped
+ * per sheet, because a 40,000-row export is not something to read whole; the
+ * cap is stated so the model knows what it did not see.
+ */
+async function spreadsheetToText(bytes: Buffer): Promise<string> {
+  const ROWS = 300;
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(bytes as unknown as ArrayBuffer);
+  const out: string[] = [];
+  wb.eachSheet((ws) => {
+    const lines: string[] = [];
+    let seen = 0;
+    ws.eachRow({ includeEmpty: false }, (row) => {
+      seen++;
+      if (seen > ROWS) return;
+      const cells: string[] = [];
+      row.eachCell({ includeEmpty: true }, (cell) => cells.push(cell.text ?? ""));
+      lines.push(cells.join("\t"));
+    });
+    out.push(
+      `## Sheet "${ws.name}" (${seen} row${seen === 1 ? "" : "s"}${seen > ROWS ? `, first ${ROWS} shown` : ""})\n${lines.join("\n")}`,
+    );
+  });
+  return out.join("\n\n") || "(the workbook has no sheets)";
+}
+
+/** What an assistant can be handed in one go. Larger files are described, not delivered. */
+const ATTACHMENT_LIMIT = 8 * 1024 * 1024;
+
+async function readAll(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return Buffer.concat(chunks);
 }
 
 /* ------------------------------------------------------------- resolving -- */
@@ -421,6 +484,76 @@ export function buildServer(actor: Actor): McpServer {
         const state = await open(found.boardId);
         const c = state.cards.find((x) => x.id === found.cardId)!;
         return ok(detail(state, c));
+      }),
+  );
+
+  server.registerTool(
+    "get_attachment",
+    {
+      title: "View an attachment",
+      description:
+        "Fetch a file attached to a card so you can look at it: images come back as images, spreadsheets (.xlsx) and Word documents (.docx) as their text, text files as text, PDFs as documents. Attachment ids come from get_card. Links are not fetched — their url is in get_card already.",
+      inputSchema: z.object({ attachment_id: z.uuid() }),
+      annotations: READ,
+    },
+    ({ attachment_id }) =>
+      guarded(async () => {
+        const [row] = await db
+          .select({ name: attachment.name, url: attachment.url, boardId: card.boardId, cardId: card.id })
+          .from(attachment)
+          .innerJoin(card, eq(card.id, attachment.cardId))
+          .where(eq(attachment.id, attachment_id))
+          .limit(1);
+        if (!row) throw new ToolError("No attachment has that id. Attachment ids come from get_card.");
+        if (!row.url.startsWith(FILE_URL)) {
+          throw new ToolError(`"${row.name}" is a link, not an uploaded file: ${row.url}`);
+        }
+        await authorizeRead(row.boardId, actor);
+
+        const stored = await storage.get(attachment_id);
+        if (!stored) throw new ToolError("That file is no longer in storage.");
+        if (stored.size > ATTACHMENT_LIMIT) {
+          throw new ToolError(
+            `"${row.name}" is ${(stored.size / 1048576).toFixed(1)} MB, more than can be handed over here (8 MB). Ask the person to look at it, or to attach a smaller version.`,
+          );
+        }
+        const bytes = await readAll(stored.stream);
+        const type = stored.contentType.toLowerCase().split(";")[0]?.trim() || "application/octet-stream";
+        const caption = `${row.name} (${type}, ${(bytes.length / 1024).toFixed(0)} KB)`;
+
+        if (type.startsWith("image/") && type !== "image/svg+xml") {
+          return {
+            content: [
+              { type: "text", text: caption },
+              { type: "image", data: bytes.toString("base64"), mimeType: type },
+            ],
+          };
+        }
+        if (type.startsWith("text/") || type === "image/svg+xml" || type === "application/json" || type.endsWith("+json") || type.endsWith("+xml")) {
+          return { content: [{ type: "text", text: `${caption}\n\n${bytes.toString("utf8")}` }] };
+        }
+        const ext = extOf(row.name);
+        if (type === XLSX_TYPE || ext === "xlsx" || ext === "xlsm") {
+          return { content: [{ type: "text", text: `${caption}\n\n${await spreadsheetToText(bytes)}` }] };
+        }
+        if (ext === "xls") {
+          throw new ToolError(`"${row.name}" is an old-format .xls workbook, which cannot be read here. Ask for it saved as .xlsx.`);
+        }
+        if (type === DOCX_TYPE || ext === "docx") {
+          const { value } = await mammoth.extractRawText({ buffer: bytes });
+          return { content: [{ type: "text", text: `${caption}\n\n${value.trim() || "(the document has no text)"}` }] };
+        }
+        // A PDF, or anything else: an embedded resource, which clients that can
+        // read documents will open and the rest will at least name.
+        return {
+          content: [
+            { type: "text", text: caption },
+            {
+              type: "resource",
+              resource: { uri: `pergola://attachment/${attachment_id}`, mimeType: type, blob: bytes.toString("base64") },
+            },
+          ],
+        };
       }),
   );
 

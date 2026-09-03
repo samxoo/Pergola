@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import WebSocket from "ws";
 import { Client as McpClient, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import ExcelJS from "exceljs";
 import { verify } from "./automation/signature.js";
 import {
   atEnd,
@@ -1177,6 +1178,36 @@ async function main() {
 
   const noSession = await fetch(`${BASE}${uploaded.url}`);
   check(noSession.status === 401, "but not to someone with no session");
+
+  // An assistant sees the picture itself, not a URL it cannot open.
+  const viewer = new McpClient({ name: "e2e", version: "1.0.0" });
+  await viewer.connect(
+    new StreamableHTTPClientTransport(new URL(`${BASE}/api/mcp`), {
+      requestInit: { headers: { authorization: `Bearer ${minted.token}` } },
+    }),
+  );
+  const shown = await viewer.callTool({ name: "get_attachment", arguments: { attachment_id: uploaded.id } });
+  const picture = (shown.content as { type: string; mimeType?: string; data?: string }[]).find((b) => b.type === "image");
+  check(
+    !shown.isError && picture?.mimeType === "image/png" && Buffer.from(picture.data ?? "", "base64").toString() === "\x89PNG fake bytes",
+    "an assistant asking for an attached image gets the image itself, through MCP",
+  );
+
+  // And a spreadsheet as its cells, not its bytes.
+  const wb = new ExcelJS.Workbook();
+  const sheetIn = wb.addWorksheet("Stock");
+  sheetIn.addRow(["SKU", "Name", "Qty"]);
+  sheetIn.addRow(["A-100", "Widget", 42]);
+  const xlsxBytes = Buffer.from(await wb.xlsx.writeBuffer());
+  const xlsx = await upload("stock.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsxBytes);
+  const sheet = (await xlsx.json()) as { id: string };
+  const cells = await viewer.callTool({ name: "get_attachment", arguments: { attachment_id: sheet.id } });
+  const cellText = String((cells.content as { text?: string }[])[0]?.text ?? "");
+  check(
+    !cells.isError && cellText.includes('Sheet "Stock"') && cellText.includes("A-100\tWidget\t42"),
+    "and an attached spreadsheet comes back as its cells",
+  );
+  await viewer.close();
   const stranger = await fetch(`${BASE}${uploaded.url}`, { headers: { cookie: sam.cookie() } });
   check([401, 403].includes(stranger.status) || stranger.status === 200,
     "and board membership decides who may read it");
