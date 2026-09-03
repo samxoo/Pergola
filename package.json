@@ -16,6 +16,7 @@
     "db:seed": "pnpm --filter @pergola/server db:seed",
     "prebuild": "true"
   },
+  "packageManager": "pnpm@11.18.0",
   "devDependencies": {
     "typescript": "^5.9.3"
   }
