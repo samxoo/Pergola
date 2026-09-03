@@ -6,6 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import WebSocket from "ws";
+import { Client as McpClient, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { verify } from "./automation/signature.js";
 import {
   atEnd,
@@ -695,6 +696,86 @@ async function main() {
     listed.length > 0 && listed.every((t) => t.token === undefined),
     "listing tokens never returns the secret again",
   );
+
+  /* ----------------------------------------------------------------- MCP */
+  section("MCP");
+  const noToken = await fetch(`${BASE}/api/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+  });
+  check(
+    noToken.status === 401 && (noToken.headers.get("www-authenticate") ?? "").startsWith("Bearer"),
+    "the MCP endpoint refuses a caller with no token, and says how to get in",
+  );
+
+  const assistant = new McpClient({ name: "e2e", version: "1.0.0" });
+  await assistant.connect(
+    new StreamableHTTPClientTransport(new URL(`${BASE}/api/mcp`), {
+      requestInit: { headers: { authorization: `Bearer ${minted.token}` } },
+    }),
+  );
+  const toolList = await assistant.listTools();
+  check(
+    toolList.tools.length >= 10 && toolList.tools.some((tl) => tl.name === "my_cards"),
+    "an assistant connecting with that token sees the Pergola tools",
+  );
+
+  const asWho = (await assistant.callTool({ name: "list_boards", arguments: {} })).structuredContent as {
+    me: { name: string };
+    boards: { id: string }[];
+  };
+  check(
+    asWho.me.name === "Dana" && asWho.boards.some((b) => b.id === board.id),
+    "list_boards answers as the token's owner, with their boards",
+  );
+
+  const madeRes = await assistant.callTool({
+    name: "create_card",
+    arguments: { board_id: board.id, list: "To do", title: "Written by an assistant", assignees: ["me"], due: "2030-01-01" },
+  });
+  const made = madeRes.structuredContent as { id: string; key: string; list: string; assignees: string[]; due: string };
+  check(
+    !madeRes.isError && made.list === "To do" && made.assignees.length === 1 && made.due.startsWith("2030-01-01"),
+    "create_card makes a card in a list named by title, assigned to the caller, with a date",
+  );
+
+  const mine = (await assistant.callTool({ name: "my_cards", arguments: {} })).structuredContent as {
+    cards: { id: string }[];
+  };
+  check(mine.cards.some((cd) => cd.id === made.id), "and my_cards finds it");
+
+  const movedRes = await assistant.callTool({
+    name: "move_card",
+    arguments: { card: made.key, board_id: board.id, to_list: "Done" },
+  });
+  check(
+    !movedRes.isError && (movedRes.structuredContent as { list: string }).list === "Done",
+    "move_card takes a card by its key to a list by its title",
+  );
+
+  const cardView = (await assistant.callTool({ name: "get_card", arguments: { card: made.id } })).structuredContent as {
+    list: string;
+    created_by: string | null;
+  };
+  check(cardView.list === "Done" && typeof cardView.created_by === "string", "get_card shows the move, and who created it");
+
+  const wrong = await assistant.callTool({ name: "move_card", arguments: { card: made.id, to_list: "Nowhere" } });
+  const wrongText = String((wrong.content as { text?: string }[])[0]?.text ?? "");
+  check(
+    wrong.isError === true && wrongText.includes("No list called") && wrongText.includes("Done"),
+    "a wrong list name is refused with the real list names, not a stack trace",
+  );
+
+  const tidy = await assistant.callTool({
+    name: "update_card",
+    arguments: { card: made.id, unassign: ["me"], due: null },
+  });
+  const tidied = tidy.structuredContent as { assignees: string[]; due: string | null };
+  check(!tidy.isError && tidied.assignees.length === 0 && tidied.due === null, "update_card changes only what it is passed");
+  const gone = await assistant.callTool({ name: "archive_card", arguments: { card: made.key, board_id: board.id } });
+  check(!gone.isError, "archive_card puts it away");
+  await assistant.close();
 
   /* ------------------------------------------------------------ webhooks */
   section("Webhooks");

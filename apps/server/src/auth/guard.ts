@@ -37,7 +37,7 @@ export const mintToken = () => `prg_${randomBytes(24).toString("base64url")}`;
 export const hashToken = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 
-async function actorFromToken(header: string | undefined): Promise<Actor | null> {
+export async function actorFromToken(header: string | undefined): Promise<Actor | null> {
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice(7).trim();
   if (!token) return null;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { describeRule, type Action, type BoardState, type Rule, type Trigger } from "@pergola/shared";
 import { useDialogs } from "../lib/Dialogs.js";
+import { ConnectAI } from "./ConnectAI.js";
 import { useT, usePlural, useDateLocale } from "../lib/i18n.js";
 import { Activity } from "./Activity.js";
 
@@ -33,6 +34,8 @@ export function Settings({ state, boardId, onClose }: Props) {
   const [rules, setRules] = useState<Rule[] | null>(null);
   const [hooks, setHooks] = useState<Hook[] | null>(null);
   const [tokens, setTokens] = useState<Token[] | null>(null);
+  /** A freshly minted token, while the set-up dialog for an assistant is open. */
+  const [connecting, setConnecting] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<"private" | "public" | null>(null);
 
   useEffect(() => {
@@ -178,6 +181,26 @@ export function Settings({ state, boardId, onClose }: Props) {
       title: t("Copy this token now"),
       description: t("{token}\n\nOnly its hash is stored, so this is the one time it can be shown.", { token }),
     });
+    await loadTokens();
+  };
+
+  /**
+   * An assistant gets a token of its own, named for what it is, so it shows up
+   * in the list as one — and can be revoked on its own, without touching a
+   * script's.
+   */
+  const connectAssistant = async () => {
+    const res = await fetch("/api/tokens", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: t("AI assistant"), expiresInDays: null }),
+    });
+    if (!res.ok) {
+      await tell({ title: t("That token was not created"), description: t("Please try again.") });
+      return;
+    }
+    const { token } = (await res.json()) as { token: string };
+    setConnecting(token);
     await loadTokens();
   };
 
@@ -381,6 +404,18 @@ export function Settings({ state, boardId, onClose }: Props) {
           {tab === "tokens" && (
             <>
               <div className="section-head">
+                <h3>{t("AI assistants")}</h3>
+                <button className="linkish" type="button" onClick={() => void connectAssistant()}>
+                  {t("Connect")}
+                </button>
+              </div>
+              <p className="muted">
+                {t(
+                  "Claude Code, Cursor, VS Code and any other MCP client can read your boards and work the cards on them — as you, with your access. One click or one command to set up.",
+                )}
+              </p>
+
+              <div className="section-head">
                 <h3>{t("Your API tokens")}</h3>
                 <button className="linkish" type="button" onClick={addToken}>
                   {t("Add")}
@@ -418,6 +453,7 @@ export function Settings({ state, boardId, onClose }: Props) {
           )}
         </div>
       </aside>
+      {connecting && <ConnectAI token={connecting} onClose={() => setConnecting(null)} />}
     </>
   );
 }

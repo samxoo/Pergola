@@ -17,6 +17,7 @@ import { files } from "./routes/files.js";
 import { integrations } from "./routes/integrations.js";
 import { publicBoards } from "./routes/public.js";
 import { stream } from "./routes/stream.js";
+import { mcp } from "./mcp/route.js";
 
 /**
  * The application, and nothing else.
@@ -135,6 +136,9 @@ app.on(["GET", "POST"], "/api/auth/*", async (c) => {
 
 // Mounted before the authenticated API so it never inherits its middleware.
 app.route("/api/public", publicBoards);
+// Likewise: the MCP endpoint does its own bearer check, and answers a missing
+// token with the challenge an MCP client understands, not a sign-in message.
+app.route("/api", mcp);
 
 const api = app
   .route("/api", admin)

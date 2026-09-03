@@ -1753,3 +1753,30 @@ button.brand:focus-visible { outline: 2px solid var(--beam); outline-offset: 3px
   font-size: 12px;
 }
 .side-origin .chip.avatar { flex: none; }
+
+/* ---- connecting an assistant ---- */
+
+.dialog.connect-ai { width: min(600px, calc(100vw - 32px)); gap: 12px; }
+.connect-warn { color: var(--rust); }
+.connect-tabs { align-self: flex-start; margin-top: 2px; }
+.connect-pane { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; }
+.connect-pane p { margin: 0; }
+.connect-code {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--ground);
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.connect-pane .dialog-actions { margin-top: -4px; }
+.connect-pane .dialog-actions.start { justify-content: flex-start; margin-top: 0; }
+.connect-facts { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0; align-items: center; }
+.connect-facts dt { color: var(--muted); font-size: 12px; }
+.connect-facts dd { margin: 0; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.connect-facts code { font-size: 12px; overflow-wrap: anywhere; }

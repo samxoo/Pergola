@@ -302,6 +302,32 @@ it landed.
 
 Mutation kinds are defined in `packages/shared/src/mutations.ts`.
 
+## AI assistants (MCP)
+
+Pergola is an [MCP](https://modelcontextprotocol.io) server. Claude Code,
+Cursor, VS Code's agent mode and any other MCP client can list your boards,
+read cards, create and move them, tick checklists and leave comments — as you,
+with your access, and every change logged under your name like any other.
+
+Open any board, *Settings → Tokens → Connect*. It mints a token and shows the
+one-liner for each client. For Claude Code, in the CLI or the VS Code
+extension:
+
+```bash
+claude mcp add --transport http --scope user pergola https://your-host/api/mcp \
+  --header "Authorization: Bearer prg_..."
+```
+
+Then ask it: *"what's on my plate?"*, *"move PRG-12 to Done and say what
+you changed"*. The endpoint is `/api/mcp`, Streamable HTTP, stateless, so it
+runs on a serverless host as happily as on a container. Revoking the token
+disconnects the assistant.
+
+Tools: `list_boards`, `my_cards`, `get_board`, `get_card`, `search_cards`,
+`create_card`, `update_card`, `move_card`, `add_comment`, `add_checklist`,
+`check_item`, `archive_card`. Cards can be named by key (`PRG-12`) or id,
+lists by title, people by `me`, email or name.
+
 ## Webhooks
 
 Add an endpoint under *Settings → Webhooks*. Every change on that board is POSTed

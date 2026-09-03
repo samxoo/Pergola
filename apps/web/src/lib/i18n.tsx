@@ -664,6 +664,36 @@ const ka: Record<string, string> = {
   "Admin access": "ადმინის წვდომა",
   "Open board {title}": "დაფის გახსნა: {title}",
   "Open": "გახსნა",
+
+  // — AI assistants (MCP) —
+  "AI assistants": "AI ასისტენტები",
+  "AI assistant": "AI ასისტენტი",
+  "Connect": "დაკავშირება",
+  "Claude Code, Cursor, VS Code and any other MCP client can read your boards and work the cards on them — as you, with your access. One click or one command to set up.":
+    "Claude Code, Cursor, VS Code და ნებისმიერ სხვა MCP კლიენტს შეუძლია წაიკითხოს თქვენი დაფები და იმუშაოს ბარათებზე — თქვენი სახელით, თქვენი წვდომით. ერთი დაწკაპუნება ან ერთი ბრძანება.",
+  "That token was not created": "ტოკენი არ შეიქმნა",
+  "Connect an AI assistant": "AI ასისტენტის დაკავშირება",
+  "The assistant will see the boards you see and act under your name: read cards, create and move them, tick checklists and leave comments. Revoke the token to end it.":
+    "ასისტენტი დაინახავს იმ დაფებს, რომლებსაც თქვენ ხედავთ, და იმოქმედებს თქვენი სახელით: წაიკითხავს ბარათებს, შექმნის და გადაიტანს მათ, მონიშნავს ჩეკლისტებს და დატოვებს კომენტარებს. შესაწყვეტად გააუქმეთ ტოკენი.",
+  "This token is shown once. Set the assistant up now, or copy the token somewhere safe.":
+    "ეს ტოკენი მხოლოდ ერთხელ ჩანს. დააყენეთ ასისტენტი ახლავე, ან შეინახეთ ტოკენი უსაფრთხო ადგილას.",
+  "Other": "სხვა",
+  "Run this once in a terminal. It works in the Claude Code CLI and in the VS Code extension alike, for every project.":
+    "გაუშვით ერთხელ ტერმინალში. მუშაობს Claude Code-ის CLI-შიც და VS Code-ის გაფართოებაშიც, ყველა პროექტისთვის.",
+  "Copy": "კოპირება",
+  "Copied": "დაკოპირდა",
+  "Prefer a file? Put this in a .mcp.json at the root of a project to share it with that project only:":
+    "ფაილი გირჩევნიათ? ჩადეთ ეს პროექტის ძირში .mcp.json-ში, რომ მხოლოდ იმ პროექტს გაუზიაროთ:",
+  "One click, for GitHub Copilot's agent mode in VS Code:": "ერთი დაწკაპუნებით, VS Code-ში GitHub Copilot-ის აგენტის რეჟიმისთვის:",
+  "Install in VS Code": "დაყენება VS Code-ში",
+  "Or add this to .vscode/mcp.json:": "ან დაამატეთ ეს .vscode/mcp.json-ში:",
+  "One click, in Cursor:": "ერთი დაწკაპუნებით, Cursor-ში:",
+  "Install in Cursor": "დაყენება Cursor-ში",
+  "Or add this to .cursor/mcp.json:": "ან დაამატეთ ეს .cursor/mcp.json-ში:",
+  "Any MCP client that speaks Streamable HTTP can connect with these:":
+    "ნებისმიერი MCP კლიენტი, რომელიც Streamable HTTP-ს იყენებს, ამით დაუკავშირდება:",
+  "Endpoint": "ენდპოინტი",
+  "Header": "ჰედერი",
 };
 
 export default ka;
