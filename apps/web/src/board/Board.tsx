@@ -160,6 +160,12 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
   const [dragCards, setDragCards] = useState<Record<string, string[]> | null>(null);
   const [dragOrder, setDragOrder] = useState<string[] | null>(null);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+  /*
+   * A column on the move. The light bay is for a card looking for a list; a
+   * list looking for a place in the row is not that, and lighting every bay
+   * it passes over — or itself — reads as noise.
+   */
+  const [draggingColumn, setDraggingColumn] = useState(false);
   const cardsByCell = dragCards ?? committedCards;
   const order = dragOrder ?? committedOrder;
 
@@ -167,6 +173,7 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
     setDragCards(null);
     setDragOrder(null);
     setDraggingCardId(null);
+    setDraggingColumn(false);
   };
 
   /*
@@ -188,6 +195,7 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
       onDragStart={(event) => {
         const { source } = event.operation;
         if (source?.type === "item") setDraggingCardId(String(source.id));
+        if (source?.type === "column") setDraggingColumn(true);
       }}
       onDragOver={(event) => {
         const { source } = event.operation;
@@ -298,7 +306,9 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
                   const cards = (cardsByCell[id] ?? [])
                     .map((cid) => cardById.get(cid))
                     .filter((c): c is NonNullable<typeof c> => Boolean(c));
-                  const hidden = (fullCards[id]?.length ?? 0) - cards.length;
+                  // Against the committed set, not the drag reflow: a card on
+                  // its way out of this cell is not a hidden one.
+                  const hidden = (fullCards[id]?.length ?? 0) - (committedCards[id]?.length ?? 0);
 
                   return (
                     <Column
@@ -312,6 +322,7 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
                       index={index}
                       cards={cards}
                       lit={litCell === id}
+                      columnMoving={draggingColumn}
                       hidden={hidden}
                       onShowMore={() =>
                         setRevealed((r) => ({ ...r, [id]: (r[id] ?? PAGE) + PAGE }))

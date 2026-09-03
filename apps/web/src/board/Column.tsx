@@ -19,6 +19,8 @@ type Props = {
   cards: CardModel[];
   /** True while a dragged card is destined for this bay. See Board.tsx. */
   lit: boolean;
+  /** True while a *column* is being dragged: no bay lights up for that. */
+  columnMoving: boolean;
   /** Returns the new card's id, so a composer can attach a file to it. */
   onAdd: (listId: string, title: string) => Promise<string>;
   /** Files pasted or dropped while adding a card. */
@@ -40,6 +42,7 @@ export function Column({
   index,
   cards,
   lit,
+  columnMoving,
   hidden,
   onShowMore,
   onAdd,
@@ -68,7 +71,7 @@ export function Column({
   return (
     <section
       ref={ref}
-      className={`column${lit || isDropTarget ? " is-over" : ""}${overWip ? " over-wip" : ""}`}
+      className={`column${!columnMoving && (lit || isDropTarget) ? " is-over" : ""}${overWip ? " over-wip" : ""}`}
       data-dragging={isDragging}
     >
       <header className="column-head" style={structural ? undefined : { cursor: "default" }}>

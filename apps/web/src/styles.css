@@ -301,21 +301,25 @@ button { font: inherit; color: inherit; }
 .column.is-over::before { opacity: 1; }
 .column.is-over { border-color: var(--beam); }
 
-/* The lit edge at the very top of the bay: the beam catching the light. */
-.column::after {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 2px;
-  border-radius: var(--r) var(--r) 0 0;
-  background: var(--beam);
-  opacity: 0;
-  transition: opacity 0.18s ease-out;
-  pointer-events: none;
-}
-.column.is-over::after { opacity: 1; }
+/*
+ * The lit edge at the very top of the bay — the beam catching the light — is
+ * the wash's own top border, so it follows the bay's rounded corners. As a
+ * separate strip it ran straight across and stuck out past the curve on both
+ * sides, wider than the bay it belonged to.
+ */
+.column::before { border-top: 2px solid var(--beam); }
 
-.column[data-dragging="true"] { opacity: 0.55; }
+/*
+ * A column on the move. dnd-kit floats a copy of it under the pointer; that copy
+ * lifts off the board like a card does, rather than fading — faded, it reads as
+ * a ghost of the thing instead of the thing. The slot it left is hidden by
+ * dnd-kit already.
+ */
+.column[data-dnd-dragging="true"] {
+  box-shadow: var(--drag);
+  border-color: var(--beam);
+  cursor: grabbing;
+}
 
 /* ------------------------------------------------------------- composer --- */
 
