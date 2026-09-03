@@ -4,10 +4,13 @@ import type { Context, MiddlewareHandler } from "hono";
 import type { MutationKind } from "@pergola/shared";
 import { auth } from "../auth.js";
 import { db } from "../db/index.js";
-import { apiToken, boardMember, user } from "../db/schema.js";
+import { apiToken, board, boardMember, user } from "../db/schema.js";
 import type { InstanceRole } from "./instance.js";
 
 export type Actor = { id: string; name: string; email: string; role: InstanceRole };
+
+/** What a banned person is told when whoever banned them left no message. */
+export const BAN_FALLBACK = "Your account has been banned from this instance.";
 export type Role = "admin" | "member" | "observer";
 
 export type Env = { Variables: { actor: Actor } };
@@ -99,12 +102,20 @@ export const requireUser: MiddlewareHandler<Env> = async (c, next) => {
    * read is worth it on the path that decides who anyone is.
    */
   const [live] = await db
-    .select({ role: user.role, deactivatedAt: user.deactivatedAt })
+    .select({ role: user.role, deactivatedAt: user.deactivatedAt, banReason: user.banReason })
     .from(user)
     .where(eq(user.id, session.user.id))
     .limit(1);
-  if (!live || live.deactivatedAt) {
+  if (!live) {
     return c.json({ message: "That account no longer has access to this instance" }, 401);
+  }
+  /*
+   * Banned. A 403 with the reason, not a 401: the session is real, the person
+   * is who they say they are, and what they need to hear is why the door is
+   * shut — which the client shows them, and keeps showing them.
+   */
+  if (live.deactivatedAt) {
+    return c.json({ code: "banned", message: live.banReason ?? BAN_FALLBACK }, 403);
   }
 
   c.set("actor", {
@@ -147,18 +158,47 @@ const CAPABILITIES: Record<Role, ReadonlySet<MutationKind>> = {
   observer: new Set<MutationKind>(["comment.create", "comment.edit", "comment.delete"]),
 };
 
-export async function roleOn(boardId: string, userId: string): Promise<Role | null> {
+/** Owners and admins run the instance; the rest are members of it. */
+export const runsInstance = (role: InstanceRole | string | null | undefined) =>
+  role === "owner" || role === "admin";
+
+/**
+ * What this person is on this board.
+ *
+ * Membership answers first. Failing that, whoever runs the instance is an admin
+ * on every board on it: the instance is the company, and the people running it
+ * can open any board the company has — the way a workspace admin can in Trello.
+ * That is the one place instance roles and board roles meet, so it lives here
+ * and nowhere else. Pass `instanceRole` when the caller already knows it, to
+ * spare a read.
+ */
+export async function roleOn(
+  boardId: string,
+  userId: string,
+  instanceRole?: InstanceRole,
+): Promise<Role | null> {
   const [row] = await db
     .select({ role: boardMember.role })
     .from(boardMember)
     .where(and(eq(boardMember.boardId, boardId), eq(boardMember.userId, userId)))
     .limit(1);
-  return row?.role ?? null;
+  if (row) return row.role;
+
+  let role: string | undefined = instanceRole;
+  if (role === undefined) {
+    const [who] = await db.select({ role: user.role }).from(user).where(eq(user.id, userId)).limit(1);
+    role = who?.role;
+  }
+  if (!runsInstance(role)) return null;
+
+  // Admin on any board that exists — not on a board id someone made up.
+  const [exists] = await db.select({ id: board.id }).from(board).where(eq(board.id, boardId)).limit(1);
+  return exists ? "admin" : null;
 }
 
 /** Read access. Throws rather than returning an empty board. */
 export async function authorizeRead(boardId: string, actor: Actor): Promise<Role> {
-  const role = await roleOn(boardId, actor.id);
+  const role = await roleOn(boardId, actor.id, actor.role);
   if (!role) throw new Forbidden("You are not a member of that board");
   return role;
 }

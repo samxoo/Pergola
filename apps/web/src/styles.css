@@ -1701,3 +1701,38 @@ button.attach-thumb:hover { border-color: var(--beam); transform: translateY(-1p
 .undogroup .btn:disabled { opacity: 0.32; }
 /* A dot and, when it matters, a count. No word for a colour that already says it. */
 .status { gap: 6px; }
+
+/* ---- the brand is a way home ---- */
+
+button.brand { border: 0; background: none; padding: 0; cursor: pointer; font: inherit; color: inherit; }
+button.brand:focus-visible { outline: 2px solid var(--beam); outline-offset: 3px; border-radius: 4px; }
+.home-btn { padding: 5px 10px; }
+
+/* ---- banned: the door with the note on it ---- */
+
+.gate.banned .gate-card { border-left: 3px solid var(--rust); }
+.banned-title {
+  margin: 0;
+  font-family: "Bricolage Grotesque", "Noto Sans Georgian", Geist, sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.banned-reason {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--ground);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.banned-lede { margin: 0; }
+.admin .ban-reason {
+  font-size: 12px;
+  color: var(--rust);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

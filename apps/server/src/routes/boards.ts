@@ -1,5 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -35,6 +35,7 @@ import {
   authorizeWrite,
   Forbidden,
   requireUser,
+  runsInstance,
   type Env,
 } from "../auth/guard.js";
 
@@ -57,23 +58,42 @@ export const boards = new Hono<Env>()
     await next();
   })
 
-  /** Only boards this person belongs to. There is no "all boards" view. */
+  /**
+   * The boards this person can open.
+   *
+   * For a member, the boards they belong to. For whoever runs the instance,
+   * every board on it — `member` says which of those they actually sit on, so
+   * the home page can keep the two apart. Counts ride along for the tiles.
+   */
   .get("/boards", async (c) => {
+    const actor = actorOf(c);
     const maker = alias(user, "maker");
     const rows = await db
       .select({
         id: board.id,
         title: board.title,
         seq: board.seq,
-        role: boardMember.role,
+        // Membership role, or admin by virtue of running the instance — see roleOn().
+        role: sql<string>`coalesce(${boardMember.role}, 'admin')`,
+        member: sql<boolean>`(${boardMember.userId} is not null)`,
         // Who started it. A left join: a board can outlive the account that did.
         createdBy: maker.name,
         createdAt: board.createdAt,
+        memberCount: sql<number>`(
+          select count(*)::int from board_member bm where bm.board_id = ${board.id}
+        )`,
+        cardCount: sql<number>`(
+          select count(*)::int from card ca
+          where ca.board_id = ${board.id} and ca.archived_at is null
+        )`,
       })
       .from(board)
-      .innerJoin(boardMember, eq(boardMember.boardId, board.id))
+      .leftJoin(
+        boardMember,
+        and(eq(boardMember.boardId, board.id), eq(boardMember.userId, actor.id)),
+      )
       .leftJoin(maker, eq(maker.id, board.createdBy))
-      .where(eq(boardMember.userId, actorOf(c).id))
+      .where(runsInstance(actor.role) ? undefined : isNotNull(boardMember.userId))
       .orderBy(asc(board.createdAt));
     return c.json(
       rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),

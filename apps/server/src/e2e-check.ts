@@ -1231,12 +1231,31 @@ async function main() {
     headers: { "content-type": "application/json", origin: BASE, cookie: adminCookie },
     body: JSON.stringify({ active: false }),
   });
-  check(revoke.status === 200, "an admin can revoke access when someone leaves");
+  check(revoke.status === 400, "a ban without a message is refused — the message is the point");
+
+  const banned = await fetch(`${BASE}/api/admin/people/${hire.id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", origin: BASE, cookie: adminCookie },
+    body: JSON.stringify({ active: false, reason: "Talk to Dana before you come back." }),
+  });
+  check(banned.status === 200, "an admin can ban someone, with a message");
 
   const afterRevoke = await fetch(`${BASE}/api/boards`, { headers: { cookie: hireCookie } });
+  const afterBody = (await afterRevoke.json()) as { code?: string; message?: string };
   check(
-    afterRevoke.status === 401,
+    afterRevoke.status === 403 && afterBody.code === "banned",
     "and their existing session stops working immediately, not in thirty days",
+  );
+  check(
+    afterBody.message === "Talk to Dana before you come back.",
+    "with the message the admin wrote",
+  );
+  const notice = (await (
+    await fetch(`${BASE}/api/me`, { headers: { cookie: hireCookie } })
+  ).json()) as { banned?: boolean; banReason?: string };
+  check(
+    notice.banned === true && notice.banReason === "Talk to Dana before you come back.",
+    "and /api/me still answers them, so the notice can say why",
   );
 
   const cannotSignIn = await fetch(`${BASE}/api/auth/sign-in/email`, {
@@ -1249,7 +1268,7 @@ async function main() {
       cookie: cannotSignIn.headers.getSetCookie().map((c) => c.split(";")[0]).join("; "),
     },
   });
-  check(backIn.status === 401, "nor can they simply sign in again");
+  check(backIn.status === 403, "nor does signing in again get them past the notice");
 
   /* ------------------------------------------------------ self-protection -- */
   const whoAmI = (await (

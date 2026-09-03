@@ -6,18 +6,18 @@ import { auth } from "../auth.js";
 import { db } from "../db/index.js";
 import { board, invite, user } from "../db/schema.js";
 import {
-  deactivate,
+  ban,
   findInvite,
   getAccess,
   hashInvite,
+  liftBan,
   mayJoin,
   mintInvite,
   ownerCount,
-  reactivate,
   setAccess,
   type InstanceRole,
 } from "../auth/instance.js";
-import { actorOf, Forbidden, requireUser, type Env } from "../auth/guard.js";
+import { actorOf, BAN_FALLBACK, Forbidden, requireUser, type Env } from "../auth/guard.js";
 
 /** Running the instance is for owners and admins. Members cannot see any of it. */
 async function requireInstanceAdmin(userId: string): Promise<InstanceRole> {
@@ -90,6 +90,40 @@ export const admin = new Hono<Env>()
   )
 
   /** What the sign-up page needs to know before it renders. */
+  /**
+   * Who am I, and am I allowed in?
+   *
+   * Answered for a banned person too — it is the one route that is — because
+   * the notice they see needs the reason, and every other route refuses them
+   * before it says anything. Session only; a token cannot be banned into a
+   * notice, it simply stops working.
+   */
+  .get("/me", async (c) => {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (!session?.user) return c.json({ message: "Sign in first" }, 401);
+    const [row] = await db
+      .select({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        deactivatedAt: user.deactivatedAt,
+        banReason: user.banReason,
+      })
+      .from(user)
+      .where(eq(user.id, session.user.id))
+      .limit(1);
+    if (!row) return c.json({ message: "That account no longer exists" }, 401);
+    return c.json({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      role: row.role,
+      banned: row.deactivatedAt !== null,
+      banReason: row.deactivatedAt !== null ? (row.banReason ?? BAN_FALLBACK) : null,
+    });
+  })
+
   .get("/access", async (c) => {
     const access = await getAccess();
     const verdict = await mayJoin("someone@example.invalid");
@@ -114,6 +148,7 @@ export const admin = new Hono<Env>()
         email: user.email,
         role: user.role,
         deactivatedAt: user.deactivatedAt,
+        banReason: user.banReason,
         createdAt: user.createdAt,
         /*
          * Aliased by hand, deliberately.
@@ -142,6 +177,7 @@ export const admin = new Hono<Env>()
         email: r.email,
         role: r.role,
         active: r.deactivatedAt === null,
+        banReason: r.deactivatedAt === null ? null : (r.banReason ?? BAN_FALLBACK),
         boardCount: r.boardCount,
         lastSeenAt: r.lastSeenAt ? new Date(r.lastSeenAt).toISOString() : null,
         createdAt: r.createdAt.toISOString(),
@@ -153,13 +189,21 @@ export const admin = new Hono<Env>()
     "/admin/people/:id",
     zValidator("json", z.object({
       role: z.enum(["owner", "admin", "member"]).optional(),
+      /** false bans, true lifts the ban. */
       active: z.boolean().optional(),
+      /** What the banned person will be told. Required when banning. */
+      reason: z.string().trim().max(1000).optional(),
     })),
     async (c) => {
       const me = actorOf(c);
       const myRole = await requireInstanceAdmin(me.id);
       const targetId = c.req.param("id");
-      const { role, active } = c.req.valid("json");
+      const { role, active, reason } = c.req.valid("json");
+
+      // A ban with no message is a locked door with no note on it. Insist.
+      if (active === false && !reason) {
+        return c.json({ message: "Say why: the message is what the banned person sees" }, 400);
+      }
 
       // You cannot promote or lock out yourself. Both are how an instance ends
       // up with nobody able to administer it, and both look like accidents.
@@ -191,8 +235,8 @@ export const admin = new Hono<Env>()
       }
 
       if (role) await db.update(user).set({ role }).where(eq(user.id, targetId));
-      if (active === false) await deactivate(targetId);
-      if (active === true) await reactivate(targetId);
+      if (active === false) await ban(targetId, reason!);
+      if (active === true) await liftBan(targetId);
 
       return c.json({ ok: true });
     },

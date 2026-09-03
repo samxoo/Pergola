@@ -9,8 +9,10 @@ export const user = pgTable("user", {
   image: text("image"),
   /** owner | admin | member. See auth.ts — the instance is the company. */
   role: text("role").notNull().default("member"),
-  /** Set when access is revoked. A deactivated account cannot authenticate. */
+  /** Set when access is revoked — a ban. A banned account gets nothing but the notice. */
   deactivatedAt: timestamp("deactivated_at"),
+  /** What the banned person is told, every time they sign in. */
+  banReason: text("ban_reason"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

@@ -55,7 +55,7 @@ export const stream = new Hono<Env>()
     }
 
     const actor = actorOf(c);
-    if (!(await roleOn(boardId, actor.id))) {
+    if (!(await roleOn(boardId, actor.id, actor.role))) {
       // A 403 rather than an empty stream: EventSource gives up on a failed
       // handshake, which is exactly the behaviour we want for "not a member".
       return c.json({ message: "You are not a member of that board" }, 403);

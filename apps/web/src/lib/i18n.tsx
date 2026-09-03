@@ -279,10 +279,10 @@ const ka: Record<string, string> = {
   "Everyone here": "ყველა აქ",
   "These are instance roles, not board roles. An owner or an admin sees this console; a member only ever sees the boards they are on.":
     "ეს არის ინსტანციის როლები, არა დაფის როლები. მფლობელი ან ადმინი ხედავს ამ კონსოლს; წევრი მხოლოდ იმ დაფებს ხედავს, რომლებზეც არის.",
-  "You cannot change your own role or deactivate yourself. Ask another owner.":
-    "ვერ შეცვლით საკუთარ როლს ან ვერ დაიდეაქტივირებთ თავს. სთხოვეთ სხვა მფლობელს.",
+  "You cannot change your own role or ban yourself. Ask another owner.":
+    "ვერ შეცვლით საკუთარ როლს და ვერ დაბლოკავთ საკუთარ თავს. სთხოვეთ სხვა მფლობელს.",
   "you": "თქვენ",
-  "Deactivated": "დეაქტივირებული",
+  "Banned": "დაბლოკილი",
   "{count} board": "{count} დაფა",
   "{count} boards": "{count} დაფა",
   "seen {ago} ago": "ნანახი {ago} წინ",
@@ -290,13 +290,21 @@ const ka: Record<string, string> = {
   "Joined {date}": "შემოუერთდა {date}",
   "Instance role for {name}": "{name}-ის ინსტანციის როლი",
   "{name}'s role was not changed": "{name}-ის როლი არ შეიცვალა",
-  "Deactivate": "დეაქტივაცია",
-  "Activate": "აქტივაცია",
-  "Deactivate {name}?": "დეაქტივირდეს {name}?",
-  "It signs them out everywhere immediately and revokes every board they are on. Nothing they wrote is deleted, and activating them again gives all of it back.":
-    "დაუყოვნებლივ გამოჰყავს ისინი ყველგან და უუქმებს ყველა დაფას, რომელზეც არიან. დაწერილი არაფერი იშლება და ხელახალი აქტივაცია ყველაფერს აბრუნებს.",
-  "{name} was not activated": "{name} არ გააქტიურდა",
-  "{name} was not deactivated": "{name} არ დეაქტივირდა",
+  "Ban": "დაბლოკვა",
+  "Lift ban": "ბლოკის მოხსნა",
+  "Ban {name}": "დაიბლოკოს {name}",
+  "Every board, upload and API call is refused the moment you confirm, and the message below is what they see whenever they sign in — on a screen they cannot close. Nothing they wrote is deleted, and lifting the ban gives all of it back.":
+    "დადასტურებისთანავე ყველა დაფა, ატვირთვა და API გამოძახება უარყოფილი იქნება, ხოლო ქვემოთ დაწერილ შეტყობინებას დაინახავენ ყოველ შესვლისას — ეკრანზე, რომელსაც ვერ დახურავენ. დაწერილი არაფერი იშლება და ბლოკის მოხსნა ყველაფერს აბრუნებს.",
+  "Message they will see": "შეტყობინება, რომელსაც დაინახავენ",
+  "Say why, and what they can do about it.": "თქვით, რატომ და რა შეუძლიათ გააკეთონ.",
+  "{name} was not banned": "{name} არ დაიბლოკა",
+  "Lift the ban on {name}?": "მოიხსნას ბლოკი {name}-ზე?",
+  "They get everything back: their boards, their uploads, and a way in.":
+    "ყველაფერი უბრუნდებათ: დაფები, ატვირთვები და შესვლის გზა.",
+  "{name}'s ban was not lifted": "{name}-ის ბლოკი არ მოიხსნა",
+  "Your account is banned": "თქვენი ანგარიში დაბლოკილია",
+  "An owner or admin of this instance banned your account. This notice stays until they lift it; nothing you made has been deleted.":
+    "ამ ინსტანციის მფლობელმა ან ადმინმა დაბლოკა თქვენი ანგარიში. ეს შეტყობინება დარჩება, სანამ ბლოკს არ მოხსნიან; თქვენ მიერ შექმნილი არაფერი წაშლილა.",
   "This makes a one-time link. Nothing is emailed — a self-hosted box has no mail server — so you send it yourself.":
     "ეს ქმნის ერთჯერად ბმულს. არაფერი იგზავნება ელფოსტით — თვითჰოსტინგს არ აქვს ფოსტის სერვერი — ამიტომ თავად აგზავნით.",
   "Create invite": "მოწვევის შექმნა",
@@ -321,8 +329,8 @@ const ka: Record<string, string> = {
   "invited by {name}": "მოიწვია {name}-მა",
   "Revoke": "გაუქმება",
   "Every board": "ყველა დაფა",
-  "Every board on the instance, including the ones you are not a member of. Titles and counts only — this console does not open other people's cards.":
-    "ინსტანციის ყველა დაფა, მათ შორის ის, რომლის წევრიც არ ხართ. მხოლოდ სათაურები და რაოდენობები — ეს კონსოლი სხვისი ბარათებს არ ხსნის.",
+  "Every board on the instance, including the ones you are not a member of. As an owner or admin you can open any of them — from here, or from the home page.":
+    "ინსტანციის ყველა დაფა, მათ შორის ისინიც, რომელთა წევრიც არ ხართ. როგორც მფლობელს ან ადმინს, ნებისმიერი მათგანის გახსნა შეგიძლიათ — აქედან ან მთავარი გვერდიდან.",
   "{count} of these {total} can be read by anyone with the link, without an account.":
     "ამ {total}-დან {count} ბმულის მქონე ნებისმიერს შეუძლია წაიკითხოს, ანგარიშის გარეშე.",
   "Nobody has made a board yet.": "დაფა ჯერ არავის შეუქმნია.",
@@ -639,6 +647,21 @@ const ka: Record<string, string> = {
   "Image, PDF or document — click to choose.": "სურათი, PDF ან დოკუმენტი — დააწკაპუნეთ ასარჩევად.",
   "Add a link": "ბმულის დამატება",
   "Preview {name}": "გადახედვა: {name}",
+
+  // — Home —
+  "Home": "მთავარი",
+  "Go to your boards": "თქვენს დაფებზე გადასვლა",
+  "Recently viewed": "ბოლოს ნანახი",
+  "Your boards": "თქვენი დაფები",
+  "Everything else on this instance": "ყველა სხვა დაფა ამ ინსტანციაზე",
+  "You are not a member of these. As an owner or admin you can still open and run them.":
+    "ამ დაფების წევრი არ ხართ. როგორც მფლობელს ან ადმინს, მაინც შეგიძლიათ მათი გახსნა და მართვა.",
+  "Create new board": "ახალი დაფის შექმნა",
+  "Import from Trello": "Trello-დან იმპორტი",
+  "People and access": "ხალხი და წვდომა",
+  "Admin access": "ადმინის წვდომა",
+  "Open board {title}": "დაფის გახსნა: {title}",
+  "Open": "გახსნა",
 };
 
 export default ka;

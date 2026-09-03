@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { invite, session, setting, user } from "../db/schema.js";
+import { invite, setting, user } from "../db/schema.js";
 
 /**
  * Running this instance.
@@ -114,21 +114,26 @@ export async function mayJoin(email: string, token?: string): Promise<SignupVerd
 /* -------------------------------------------------------------- deactivation */
 
 /**
- * Revoke access, now.
+ * Ban someone, now, and tell them why.
  *
- * Marking the account is not enough on its own: a session issued yesterday is
- * valid for thirty days, so the sessions go too. Someone who has left the
- * company is out the moment the button is pressed, not next month.
+ * The account is marked and every request from it is refused from this moment
+ * — requireUser re-reads the row on each call, so a session issued yesterday
+ * buys nothing. The sessions themselves are deliberately left alone: a banned
+ * person who is still signed in is shown the notice, with the reason, rather
+ * than a sign-in form that quietly lets them straight back into the notice.
  */
-export async function deactivate(userId: string): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx.update(user).set({ deactivatedAt: new Date() }).where(eq(user.id, userId));
-    await tx.delete(session).where(eq(session.userId, userId));
-  });
+export async function ban(userId: string, reason: string): Promise<void> {
+  await db
+    .update(user)
+    .set({ deactivatedAt: new Date(), banReason: reason })
+    .where(eq(user.id, userId));
 }
 
-export async function reactivate(userId: string): Promise<void> {
-  await db.update(user).set({ deactivatedAt: null }).where(eq(user.id, userId));
+export async function liftBan(userId: string): Promise<void> {
+  await db
+    .update(user)
+    .set({ deactivatedAt: null, banReason: null })
+    .where(eq(user.id, userId));
 }
 
 /** An instance always needs someone who can administer it. */

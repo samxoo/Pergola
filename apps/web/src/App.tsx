@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Admin } from "./Admin.js";
+import { Banned } from "./Banned.js";
+import { Home, pushRecent, readRecent, type BoardSummary } from "./Home.js";
 import { Archive } from "./board/Archive.js";
 import { Board, type GroupBy } from "./board/Board.js";
 import { CalendarView } from "./board/CalendarView.js";
@@ -22,21 +24,60 @@ import { Menu, MenuItem } from "./lib/Menu.js";
 import { Icon } from "./lib/Icon.js";
 import { copyToClipboard } from "./lib/clipboard.js";
 
-type BoardSummary = {
-  id: string;
-  title: string;
-  seq: number;
-  role: string;
-  /** Who started it. Null on a board whose creator's account is gone. */
-  createdBy: string | null;
-  createdAt: string;
-};
+/** The board named by the address bar, if any. */
+const boardFromUrl = (): string | null =>
+  location.pathname.startsWith("/b/") ? location.pathname.slice(3).split("/")[0] || null : null;
+
+type Standing = { banned: boolean; banReason: string | null };
+
+/**
+ * Is this person still allowed in?
+ *
+ * Asked once on arrival and again whenever the tab comes back into view, plus
+ * on a slow timer — so a ban lands on someone who is already signed in within
+ * moments of the admin pressing the button, not the next time they reload.
+ * A network failure keeps the last answer: being offline is not being banned.
+ */
+function useStanding(enabled: boolean): Standing | null {
+  const [standing, setStanding] = useState<Standing | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let stopped = false;
+    const check = async () => {
+      try {
+        const r = await fetch("/api/me");
+        if (!r.ok) return;
+        const body = (await r.json()) as Standing;
+        if (!stopped) setStanding({ banned: body.banned, banReason: body.banReason });
+      } catch {
+        if (!stopped) setStanding((prev) => prev ?? { banned: false, banReason: null });
+      }
+    };
+    void check();
+    const timer = setInterval(() => void check(), 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [enabled]);
+  return standing;
+}
 
 export function App() {
   const t = useT();
   const { data: session, isPending } = authClient.useSession();
+  const standing = useStanding(Boolean(session?.user));
   if (isPending) return <div className="loading">{t("Loading…")}</div>;
   if (!session?.user) return <SignIn />;
+  if (!standing) return <div className="loading">{t("Loading…")}</div>;
+  if (standing.banned) return <Banned reason={standing.banReason ?? ""} />;
   return (
     <Workspace
       meId={session.user.id}
@@ -59,7 +100,24 @@ function Workspace({
   const t = useT();
   const pl = usePlural();
   const [boards, setBoards] = useState<BoardSummary[] | null>(null);
-  const [boardId, setBoardId] = useState<string | null>(null);
+  /*
+   * The open board lives in the URL — /b/<id> — so a refresh, a bookmark or a
+   * pasted link lands on the board and not on the home page. No board means
+   * home, at /.
+   */
+  const [boardId, setBoardId] = useState<string | null>(boardFromUrl);
+  const [recentIds, setRecentIds] = useState<string[]>(readRecent);
+  const openBoard = useCallback((id: string | null) => {
+    setBoardId(id);
+    if (id) setRecentIds(pushRecent(id));
+    const path = id ? `/b/${id}` : "/";
+    if (location.pathname !== path) history.pushState(null, "", path);
+  }, []);
+  useEffect(() => {
+    const onPop = () => setBoardId(boardFromUrl());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>(EMPTY);
   const [view, setView] = useState<"board" | "table" | "calendar" | "timeline">("board");
@@ -91,13 +149,22 @@ function Workspace({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => {
-    void (async () => {
-      const rows = (await (await fetch("/api/boards")).json()) as BoardSummary[];
-      setBoards(rows);
-      setBoardId((current) => current ?? rows[0]?.id ?? null);
-    })();
+  const loadBoards = useCallback(async () => {
+    const rows = (await (await fetch("/api/boards")).json()) as BoardSummary[];
+    setBoards(rows);
+    return rows;
   }, []);
+
+  useEffect(() => {
+    void loadBoards().then((rows) => {
+      // A link to a board this person cannot open goes home, not to a spinner.
+      const wanted = boardFromUrl();
+      if (wanted && !rows.some((b) => b.id === wanted)) {
+        history.replaceState(null, "", "/");
+        setBoardId(null);
+      }
+    });
+  }, [loadBoards]);
 
   const createBoard = async () => {
     const answer = await ask({
@@ -114,9 +181,9 @@ function Workspace({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ title }),
       })
-    ).json()) as BoardSummary;
-    setBoards((prev) => [...(prev ?? []), created]);
-    setBoardId(created.id);
+    ).json()) as { id: string };
+    await loadBoards();
+    openBoard(created.id);
   };
 
   const invite = async () => {
@@ -294,9 +361,8 @@ function Workspace({
             : "") +
           (out.skipped.length ? t(" Not carried over: {skipped}.", { skipped: out.skipped.join("; ") }) : ""),
       });
-      const rows = (await (await fetch("/api/boards")).json()) as BoardSummary[];
-      setBoards(rows);
-      setBoardId(out.boardId);
+      await loadBoards();
+      openBoard(out.boardId);
     };
     picker.click();
   };
@@ -307,8 +373,9 @@ function Workspace({
     ...(boards ?? []).map((b) => ({
       id: `board:${b.id}`,
       label: t("Open board: {title}", { title: b.title }),
-      run: () => setBoardId(b.id),
+      run: () => openBoard(b.id),
     })),
+    { id: "home", label: t("Go to your boards"), run: () => openBoard(null) },
     { id: "new-board", label: t("Create a board"), run: () => void createBoard() },
     { id: "import", label: t("Import a board from Trello"), run: importTrello },
     ...(boardId ? [{ id: "duplicate", label: t("Duplicate this board"), run: () => void duplicateBoard() }] : []),
@@ -326,7 +393,7 @@ function Workspace({
 
   /** Jump to a card from search: switch board if needed, then open its drawer. */
   const goToCard = (hit: Hit) => {
-    if (hit.boardId !== boardId) setBoardId(hit.boardId);
+    if (hit.boardId !== boardId) openBoard(hit.boardId);
     setFilter(EMPTY);
     setOpenCardId(hit.cardId);
   };
@@ -388,10 +455,9 @@ function Workspace({
       await tell({ title: t("That copy did not work"), description: t("Please try again.") });
       return;
     }
-    const created = (await res.json()) as BoardSummary;
-    const rows = (await (await fetch("/api/boards")).json()) as BoardSummary[];
-    setBoards(rows);
-    setBoardId(created.id);
+    const created = (await res.json()) as { id: string };
+    await loadBoards();
+    openBoard(created.id);
   };
 
   const openCard = state?.cards.find((c) => c.id === openCardId) ?? null;
@@ -403,16 +469,27 @@ function Workspace({
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
+        <button
+          className="brand"
+          type="button"
+          onClick={() => openBoard(null)}
+          title={t("Go to your boards")}
+        >
           <Mark />
           <b>Pergola</b>
-        </div>
+        </button>
 
-        {boards && boards.length > 0 && (
+        {boardId && (
+          <button className="btn home-btn" type="button" onClick={() => openBoard(null)}>
+            ← {t("Boards")}
+          </button>
+        )}
+
+        {boardId && boards && boards.length > 0 && (
           <select
             className="btn board-select"
-            value={boardId ?? ""}
-            onChange={(e) => setBoardId(e.target.value)}
+            value={boardId}
+            onChange={(e) => openBoard(e.target.value)}
             aria-label={t("Board")}
           >
             {boards.map((b) => (
@@ -432,12 +509,13 @@ function Workspace({
           </span>
         )}
 
-        <button className="btn" type="button" onClick={createBoard}>
-          {t("New board")}
-        </button>
+        {boardId && (
         <Menu label="⋯" title={t("Board actions")}>
           {(close) => (
             <>
+              <MenuItem icon="＋" onClick={() => { void createBoard(); close(); }}>
+                {t("New board")}
+              </MenuItem>
               <MenuItem icon="↧" onClick={() => { importTrello(); close(); }}>
                 {t("Import a board from Trello")}
               </MenuItem>
@@ -465,6 +543,7 @@ function Workspace({
             </>
           )}
         </Menu>
+        )}
 
         <div className="spacer" />
 
@@ -494,7 +573,7 @@ function Workspace({
         <Notifications
           names={new Map((state?.members ?? []).map((m) => [m.id, m.name || m.email]))}
           onOpen={(bId, cId) => {
-            if (bId !== boardId) setBoardId(bId);
+            if (bId !== boardId) openBoard(bId);
             if (cId) setOpenCardId(cId);
           }}
         />
@@ -504,6 +583,7 @@ function Workspace({
           * recognised instantly, and two labels in the top bar cost more room
           * than they earn — the tooltip still names them and their shortcut.
           */}
+        {boardId && (
         <div className="undogroup">
           <button
             className="btn icon-only"
@@ -526,7 +606,9 @@ function Workspace({
             <Icon name="redo" />
           </button>
         </div>
+        )}
 
+        {boardId && (
         <div
           className={`status ${pending > 0 ? "queued" : live ? "live" : "off"}`}
           title={
@@ -545,6 +627,7 @@ function Workspace({
           <i />
           {pending > 0 && <span>{pending}</span>}
         </div>
+        )}
 
         <LanguageToggle />
 
@@ -574,14 +657,16 @@ function Workspace({
 
       {!boards ? (
         <div className="loading">{t("Loading…")}</div>
-      ) : boards.length === 0 ? (
-        <div className="empty">
-          <h2>{t("Nothing here yet")}</h2>
-          <p>{t("Make a board and it will come with three lists and six labels to start from.")}</p>
-          <button className="btn primary" type="button" onClick={createBoard}>
-            {t("Create the first board")}
-          </button>
-        </div>
+      ) : boardId === null ? (
+        <Home
+          boards={boards}
+          recentIds={recentIds}
+          runsTheInstance={runsTheInstance}
+          onOpen={openBoard}
+          onCreate={() => void createBoard()}
+          onImport={importTrello}
+          onAdmin={() => setAdminOpen(true)}
+        />
       ) : state ? (
         <>
           <div className="viewbar">
@@ -689,7 +774,16 @@ function Workspace({
         />
       )}
 
-      {adminOpen && <Admin meId={meId} onClose={() => setAdminOpen(false)} />}
+      {adminOpen && (
+        <Admin
+          meId={meId}
+          onClose={() => setAdminOpen(false)}
+          onOpenBoard={(id) => {
+            setAdminOpen(false);
+            openBoard(id);
+          }}
+        />
+      )}
 
       {state && boardId && settingsOpen && (
         <Settings state={state} boardId={boardId} onClose={() => setSettingsOpen(false)} />

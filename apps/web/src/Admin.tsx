@@ -7,7 +7,12 @@ import { useT, usePlural, useDateLocale } from "./lib/i18n.js";
 // that wants these rules, and App.tsx already has to import Admin to show it.
 import "./styles.admin.css";
 
-type Props = { meId: string; onClose: () => void };
+type Props = {
+  meId: string;
+  onClose: () => void;
+  /** Open a board from the list. Owners and admins may open any of them. */
+  onOpenBoard: (id: string) => void;
+};
 
 type Tab = "people" | "invites" | "boards" | "access";
 
@@ -20,6 +25,8 @@ type Person = {
   email: string;
   role: Role;
   active: boolean;
+  /** Present only while banned: what they are shown. */
+  banReason: string | null;
   boardCount: number;
   lastSeenAt: string | null;
   createdAt: string;
@@ -70,7 +77,7 @@ const ROLE_BLURB: Record<Role, string> = {
  * everything here is about the box you are running — who is on it, who may get
  * on it, and what they have made with it.
  */
-export function Admin({ meId, onClose }: Props) {
+export function Admin({ meId, onClose, onOpenBoard }: Props) {
   const t = useT();
   const pl = usePlural();
   const locale = useDateLocale();
@@ -158,7 +165,11 @@ export function Admin({ meId, onClose }: Props) {
 
   /* -------------------------------------------------------------- people -- */
 
-  const patchPerson = async (p: Person, patch: { role?: Role; active?: boolean }, title: string) => {
+  const patchPerson = async (
+    p: Person,
+    patch: { role?: Role; active?: boolean; reason?: string },
+    title: string,
+  ) => {
     const res = await fetch(`/api/admin/people/${p.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -174,25 +185,40 @@ export function Admin({ meId, onClose }: Props) {
     await loadPeople();
   };
 
-  const setActive = async (p: Person, active: boolean) => {
-    if (!active) {
-      const ok = await confirm({
-        title: t("Deactivate {name}?", { name: p.name }),
-        description: t(
-          "It signs them out everywhere immediately and revokes every board they are on. Nothing they wrote is deleted, and activating them again gives all of it back.",
-        ),
-        confirmLabel: t("Deactivate"),
-        danger: true,
-      });
-      if (!ok) return;
-    }
-    await patchPerson(
-      p,
-      { active },
-      active
-        ? t("{name} was not activated", { name: p.name })
-        : t("{name} was not deactivated", { name: p.name }),
-    );
+  /**
+   * Banning is a door with a note on it, and the note is required: the person
+   * is refused everywhere from this moment, and the message written here is
+   * what they see whenever they are signed in, for as long as the ban stands.
+   */
+  const banPerson = async (p: Person) => {
+    const answer = await ask({
+      title: t("Ban {name}", { name: p.name }),
+      description: t(
+        "Every board, upload and API call is refused the moment you confirm, and the message below is what they see whenever they sign in — on a screen they cannot close. Nothing they wrote is deleted, and lifting the ban gives all of it back.",
+      ),
+      fields: [
+        {
+          name: "reason",
+          label: t("Message they will see"),
+          type: "textarea",
+          placeholder: t("Say why, and what they can do about it."),
+        },
+      ],
+      confirmLabel: t("Ban"),
+    });
+    const reason = answer?.reason?.trim();
+    if (!reason) return;
+    await patchPerson(p, { active: false, reason }, t("{name} was not banned", { name: p.name }));
+  };
+
+  const liftBan = async (p: Person) => {
+    const ok = await confirm({
+      title: t("Lift the ban on {name}?", { name: p.name }),
+      description: t("They get everything back: their boards, their uploads, and a way in."),
+      confirmLabel: t("Lift ban"),
+    });
+    if (!ok) return;
+    await patchPerson(p, { active: true }, t("{name}'s ban was not lifted", { name: p.name }));
   };
 
   /* ------------------------------------------------------------- invites -- */
@@ -334,7 +360,7 @@ export function Admin({ meId, onClose }: Props) {
                 // A disabled control raises no tooltip, so the reason lives on the
                 // wrapper as well as on the controls themselves.
                 const why = isMe
-                  ? t("You cannot change your own role or deactivate yourself. Ask another owner.")
+                  ? t("You cannot change your own role or ban yourself. Ask another owner.")
                   : undefined;
                 return (
                   <div key={p.id} className={`setting-row person${p.active ? "" : " is-off"}`}>
@@ -349,9 +375,14 @@ export function Admin({ meId, onClose }: Props) {
                       <span className="row-name">
                         <strong>{p.name}</strong>
                         {isMe && <span className="muted">{t("you")}</span>}
-                        {!p.active && <span className="badge off">{t("Deactivated")}</span>}
+                        {!p.active && <span className="badge off">{t("Banned")}</span>}
                       </span>
                       <span className="muted">{p.email}</span>
+                      {p.banReason && (
+                        <span className="ban-reason" title={t("Message they will see")}>
+                          “{p.banReason}”
+                        </span>
+                      )}
                       <span
                         className="muted mono small"
                         title={t("Joined {date}", {
@@ -389,9 +420,9 @@ export function Admin({ meId, onClose }: Props) {
                         type="button"
                         disabled={isMe}
                         title={why}
-                        onClick={() => void setActive(p, !p.active)}
+                        onClick={() => void (p.active ? banPerson(p) : liftBan(p))}
                       >
-                        {p.active ? t("Deactivate") : t("Activate")}
+                        {p.active ? t("Ban") : t("Lift ban")}
                       </button>
                     </div>
                   </div>
@@ -458,7 +489,7 @@ export function Admin({ meId, onClose }: Props) {
               </div>
               <p className="muted">
                 {t(
-                  "Every board on the instance, including the ones you are not a member of. Titles and counts only — this console does not open other people's cards.",
+                  "Every board on the instance, including the ones you are not a member of. As an owner or admin you can open any of them — from here, or from the home page.",
                 )}
               </p>
               {publicBoards > 0 && (
@@ -490,6 +521,9 @@ export function Admin({ meId, onClose }: Props) {
                       })}
                     </span>
                   </div>
+                  <button className="btn" type="button" onClick={() => onOpenBoard(b.id)}>
+                    {t("Open")}
+                  </button>
                 </div>
               ))}
             </>
