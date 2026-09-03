@@ -698,56 +698,63 @@ async function main() {
 
   /* ------------------------------------------------------------ webhooks */
   section("Webhooks");
-  const received: { body: string; sig: string; ts: string; event: string }[] = [];
-  const sink = createServer((req, res) => {
-    let raw = "";
-    req.on("data", (chunk) => (raw += chunk));
-    req.on("end", () => {
-      received.push({
-        body: raw,
-        sig: String(req.headers["x-pergola-signature"] ?? ""),
-        ts: String(req.headers["x-pergola-timestamp"] ?? ""),
-        event: String(req.headers["x-pergola-event"] ?? ""),
-      });
-      res.writeHead(200).end("ok");
-    });
-  });
-  await new Promise<void>((r) => sink.listen(0, "127.0.0.1", r));
-  const sinkPort = (sink.address() as { port: number }).port;
-
-  const hook = (await (
-    await dana.post(`/api/boards/${board.id}/webhooks`, {
-      url: `http://127.0.0.1:${sinkPort}/hook`,
-    })
-  ).json()) as { id: string; secret: string };
-  check(hook.secret.startsWith("whsec_"), "a webhook comes with a signing secret");
-
-  await dana.mutate(board.id, { kind: "card.rename", cardId, title: "Renamed for the webhook" });
-  // Delivery is deliberately not awaited by the request, so give it a moment.
-  for (let i = 0; i < 40 && received.length === 0; i++) {
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  check(received.length > 0, "the change was delivered to the endpoint");
-  const delivered = received[0];
-  check(delivered?.event === "card.rename", "with the event kind in a header");
-  check(
-    !!delivered && verify(hook.secret, delivered.body, delivered.ts, delivered.sig),
-    "and a signature that verifies against the secret",
-  );
-  check(
-    !!delivered && !verify("whsec_wrong", delivered.body, delivered.ts, delivered.sig),
-    "but not against the wrong one",
-  );
   /*
-   * SSRF. A webhook URL is fetched by the server, so it must not be usable to
-   * reach the private network the server sits in.
+   * Two halves that cannot both run on one box.
    *
-   * The local sink above is itself on loopback, so a development box runs with
-   * WEBHOOK_ALLOW_PRIVATE on and cannot assert the address checks. The scheme
-   * check holds either way, and ssrf.test.ts covers the addresses directly.
+   * Delivery is proven against a sink on loopback, which the SSRF guard refuses
+   * unless WEBHOOK_ALLOW_PRIVATE is on — a development setting. The address
+   * checks prove that guard, which needs it off — the production setting, and
+   * CI's. So each run proves the half its configuration allows, and says so;
+   * ssrf.test.ts covers the addresses directly either way.
    */
   const health = (await (await fetch(`${BASE}/health`)).json()) as { warning?: string };
   const privateAllowed = Boolean(health.warning);
+
+  if (privateAllowed) {
+    const received: { body: string; sig: string; ts: string; event: string }[] = [];
+    const sink = createServer((req, res) => {
+      let raw = "";
+      req.on("data", (chunk) => (raw += chunk));
+      req.on("end", () => {
+        received.push({
+          body: raw,
+          sig: String(req.headers["x-pergola-signature"] ?? ""),
+          ts: String(req.headers["x-pergola-timestamp"] ?? ""),
+          event: String(req.headers["x-pergola-event"] ?? ""),
+        });
+        res.writeHead(200).end("ok");
+      });
+    });
+    await new Promise<void>((r) => sink.listen(0, "127.0.0.1", r));
+    const sinkPort = (sink.address() as { port: number }).port;
+
+    const hook = (await (
+      await dana.post(`/api/boards/${board.id}/webhooks`, {
+        url: `http://127.0.0.1:${sinkPort}/hook`,
+      })
+    ).json()) as { id: string; secret: string };
+    check(hook.secret.startsWith("whsec_"), "a webhook comes with a signing secret");
+
+    await dana.mutate(board.id, { kind: "card.rename", cardId, title: "Renamed for the webhook" });
+    // Delivery is deliberately not awaited by the request, so give it a moment.
+    for (let i = 0; i < 40 && received.length === 0; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    check(received.length > 0, "the change was delivered to the endpoint");
+    const delivered = received[0];
+    check(delivered?.event === "card.rename", "with the event kind in a header");
+    check(
+      !!delivered && verify(hook.secret, delivered.body, delivered.ts, delivered.sig),
+      "and a signature that verifies against the secret",
+    );
+    check(
+      !!delivered && !verify("whsec_wrong", delivered.body, delivered.ts, delivered.sig),
+      "but not against the wrong one",
+    );
+    sink.close();
+  } else {
+    console.log("  skip  delivery checks (WEBHOOK_ALLOW_PRIVATE is off, so a loopback sink is refused)");
+  }
 
   const badScheme = await dana.post(`/api/boards/${board.id}/webhooks`, {
     url: "file:///etc/passwd",
@@ -768,7 +775,6 @@ async function main() {
   }
 
   await dana.get(`/api/boards/${board.id}/webhooks`);
-  sink.close();
 
   /* ---------------------------------------------------------- automation */
   section("Automation");
