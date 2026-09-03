@@ -206,6 +206,25 @@ export function useBoard(boardId: string | null, meId: string | null) {
     if (live) void drain();
   }, [live, drain]);
 
+  /**
+   * Take in a change the server made on our behalf.
+   *
+   * An upload is the case: the file goes up as a form, and the server appends
+   * the attachment to the log itself and hands the record back. It is our own
+   * change, so it lands here exactly as a confirmed mutation would — applied,
+   * undoable, and a no-op when the live connection echoes it a moment later.
+   */
+  const ingest = useCallback(
+    (rec: MutationRecord) => {
+      if (rec.inverse) {
+        undoStack.current.push(rec.inverse);
+        redoStack.current = [];
+      }
+      applyDelta([rec]);
+    },
+    [applyDelta],
+  );
+
   const undo = useCallback(() => {
     const inverse = undoStack.current.pop();
     if (inverse) void apply(inverse, "undo");
@@ -241,8 +260,10 @@ export function useBoard(boardId: string | null, meId: string | null) {
   return {
     state,
     live,
-    /** Re-read the snapshot. For writes the server makes on its own, like uploads. */
+    /** Re-read the snapshot from scratch. */
     refresh: load,
+    /** Apply a mutation the server already committed for us, such as an upload. */
+    ingest,
     /** Mutations written while offline, waiting to sync. */
     pending,
     error,

@@ -12,6 +12,7 @@ import {
   requireUser,
   type Env,
 } from "../auth/guard.js";
+import { commit } from "../mutations/commit.js";
 import { createStorage } from "../storage/adapter.js";
 
 const storage = createStorage();
@@ -142,27 +143,41 @@ export const files = new Hono<Env>()
     const data = Buffer.from(await file.arrayBuffer());
     const stored = await storage.put(key, data, file.type || "application/octet-stream");
 
+    /*
+     * The row goes in through the mutation log, not a bare insert.
+     *
+     * A bare insert was how this worked at first, and it is why an upload used
+     * to show up for the person who made it and for nobody else: the live
+     * connection carries the mutation log and nothing besides, so a row written
+     * around it never reached another screen until that person reloaded. Going
+     * through commit() appends the record, bumps the board's cursor and fires
+     * the notification, so everyone watching the board is handed the file the
+     * same way they are handed a moved card — and it turns up in the activity
+     * feed, and undo knows about it.
+     */
+    const url = `${FILE_URL}${key}`;
+    const name = displayName(file.name);
     try {
-      const [row] = await db
-        .insert(attachment)
-        .values({
-          id: key,
-          cardId,
-          url: `${FILE_URL}${key}`,
-          name: displayName(file.name),
-          addedBy: actorOf(c).id,
-        })
-        .returning();
+      const record = await commit(
+        {
+          id: randomUUID(),
+          boardId: target.boardId,
+          body: { kind: "attachment.add", attachmentId: key, cardId, url, name },
+        },
+        actorOf(c).id,
+      );
 
       return c.json(
         {
-          id: row!.id,
-          cardId: row!.cardId,
-          url: row!.url,
-          name: row!.name,
+          id: key,
+          cardId,
+          url,
+          name,
           size: stored.size,
           contentType: stored.contentType,
-          createdAt: row!.createdAt.toISOString(),
+          createdAt: record.createdAt,
+          /** The change as the board will see it, so the client can apply it directly. */
+          mutation: record,
         },
         201,
       );
@@ -238,9 +253,17 @@ export const files = new Hono<Env>()
 
     await authorizeWrite(row.boardId, actorOf(c), "attachment.remove");
 
-    // Row first. Orphaned bytes waste a few kilobytes on a volume; an attachment
-    // pointing at bytes that are gone is a broken link in somebody's card.
-    await db.delete(attachment).where(eq(attachment.id, id));
+    // Row first, and through the log, so every open board sees it go. Orphaned
+    // bytes waste a few kilobytes on a volume; an attachment pointing at bytes
+    // that are gone is a broken link in somebody's card.
+    await commit(
+      {
+        id: randomUUID(),
+        boardId: row.boardId,
+        body: { kind: "attachment.remove", attachmentId: id },
+      },
+      actorOf(c).id,
+    );
     await storage.delete(id);
     return c.body(null, 204);
   });

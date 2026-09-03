@@ -20,7 +20,7 @@ type Props = {
   /** True while a dragged card is destined for this bay. See Board.tsx. */
   lit: boolean;
   /** Returns the new card's id, so a composer can attach a file to it. */
-  onAdd: (listId: string, title: string) => string;
+  onAdd: (listId: string, title: string) => Promise<string>;
   /** Files pasted or dropped while adding a card. */
   onAttach: (cardId: string, files: File[]) => Promise<void>;
   onRenameList: (id: string, title: string) => void;
@@ -165,7 +165,7 @@ function Composer({
   onAdd,
   onAttach,
 }: {
-  onAdd: (title: string) => string;
+  onAdd: (title: string) => Promise<string>;
   onAttach: (cardId: string, files: File[]) => Promise<void>;
 }) {
   const t = useT();
@@ -185,7 +185,7 @@ function Composer({
     setBusy(true);
     try {
       const typed = text.trim();
-      const cardId = onAdd(typed || files[0]!.name.replace(/\.[^.]+$/, ""));
+      const cardId = await onAdd(typed || files[0]!.name.replace(/\.[^.]+$/, ""));
       setText("");
       await onAttach(cardId, files);
     } finally {
@@ -196,7 +196,7 @@ function Composer({
   const submit = () => {
     const title = text.trim();
     if (!title) return setOpen(false);
-    onAdd(title);
+    void onAdd(title);
     setText(""); // stay open: adding several cards in a row is the common case
   };
 

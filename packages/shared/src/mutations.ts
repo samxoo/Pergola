@@ -194,18 +194,35 @@ export const CardVote = z.object({
 
 /* ------------------------------------------------------------- attachments */
 
+/**
+ * Where an uploaded file is served from. The server writes this form itself
+ * when it accepts an upload, and it has to be accepted back — the inverse of
+ * removing one is adding it again, and that inverse rides through the same
+ * validator as everything else when someone presses redo.
+ */
+const UPLOADED_FILE =
+  /^\/api\/files\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** True for a link someone typed: absolute, and only ever http or https. */
+const isWebLink = (u: string) => /^https?:\/\//i.test(u) && z.url().safeParse(u).success;
+
 export const AttachmentAdd = z.object({
   kind: z.literal("attachment.add"),
   attachmentId: id,
   cardId: id,
   /**
-   * Link attachments only. File upload needs a storage adapter (a local volume
-   * by default, S3-compatible for Supabase Storage) and lands with that work.
-   * http(s) only — a javascript: or data: URL on a card is an attack, not a link.
+   * Either a link someone pasted or one of our own uploaded files. Links are
+   * http(s) only — a javascript: or data: URL on a card is an attack, not a
+   * link. Uploads are the one relative form above, and nothing else: serving
+   * them still checks board membership on the file's own card, so naming one
+   * here grants nothing the caller could not already open.
    */
-  url: z.url().max(2000).refine((u) => /^https?:\/\//i.test(u), {
-    message: "Only http and https links can be attached",
-  }),
+  url: z
+    .string()
+    .max(2000)
+    .refine((u) => isWebLink(u) || UPLOADED_FILE.test(u), {
+      message: "Only http and https links can be attached",
+    }),
   name: z.string().min(1).max(200),
 });
 export const AttachmentRemove = z.object({

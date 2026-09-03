@@ -1,22 +1,32 @@
+import type { MutationRecord } from "@pergola/shared";
+
 /**
- * Put a file on a card.
+ * What an upload came back with.
  *
- * The server writes the attachment row itself rather than it arriving as a
- * mutation, so whatever calls this reloads the board afterwards. Returns the
- * reason it was refused, or null when it worked — a caller in the middle of
- * another action (creating a card, say) needs to decide for itself whether that
+ * A success carries the mutation the server appended for it, so the caller can
+ * feed it straight into the board the way any other confirmed change arrives —
+ * no reload, and everyone else on the board gets the same record over the live
+ * connection. A refusal carries the reason, and the caller decides whether that
  * is worth a dialog.
  */
-export async function uploadToCard(cardId: string, file: File): Promise<string | null> {
+export type UploadOutcome =
+  | { ok: true; record: MutationRecord }
+  | { ok: false; message: string };
+
+/** Put a file on a card. */
+export async function uploadToCard(cardId: string, file: File): Promise<UploadOutcome> {
   try {
     const form = new FormData();
     form.append("file", file);
     const res = await fetch(`/api/cards/${cardId}/files`, { method: "POST", body: form });
-    if (res.ok) return null;
-    const { message } = (await res.json().catch(() => ({}))) as { message?: string };
-    return message ?? "That file was not accepted.";
+    const body = (await res.json().catch(() => ({}))) as {
+      message?: string;
+      mutation?: MutationRecord;
+    };
+    if (res.ok && body.mutation) return { ok: true, record: body.mutation };
+    return { ok: false, message: body.message ?? "That file was not accepted." };
   } catch {
-    return "That file could not be uploaded.";
+    return { ok: false, message: "That file could not be uploaded." };
   }
 }
 

@@ -11,8 +11,10 @@ import {
   type Comment,
   type CustomField,
   type MutationBody,
+  type MutationRecord,
 } from "@pergola/shared";
 import { useDialogs } from "../lib/Dialogs.js";
+import { uploadToCard } from "../lib/upload.js";
 import { Activity } from "./Activity.js";
 import { InlineEdit } from "../lib/InlineEdit.js";
 import { LABEL_NAMES, avatarColor, hexFor, initials } from "../lib/labels.js";
@@ -24,8 +26,8 @@ type Props = {
   card: Card;
   meId: string | null;
   apply: (body: MutationBody) => void;
-  /** Reload the board — an upload is written by the server, not by a mutation. */
-  refresh: () => Promise<void>;
+  /** Take in a change the server committed for us — an upload, say. */
+  ingest: (rec: MutationRecord) => void;
   onClose: () => void;
 };
 
@@ -38,7 +40,7 @@ type Panel = "labels" | "members" | "dates" | "cover" | null;
  * its card dialog, which is exactly the wrong move in a tool where the board is
  * live and teammates are moving things while you read.
  */
-export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props) {
+export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props) {
   const t = useT();
   const locale = useDateLocale();
   const [panel, setPanel] = useState<Panel>(null);
@@ -76,22 +78,20 @@ export function CardDrawer({ state, card, meId, apply, refresh, onClose }: Props
    * Put a file on this card.
    *
    * One path, whichever way the file arrived — the picker, a drop, or a paste
-   * from the clipboard. The server writes the row itself, so the board is
-   * reloaded afterwards rather than a mutation being applied optimistically.
+   * from the clipboard. The server appends the attachment to the log itself
+   * and hands the record back, which goes into the board the way any confirmed
+   * change does.
    */
   const upload = async (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    const res = await fetch(`/api/cards/${card.id}/files`, { method: "POST", body: form });
-    if (!res.ok) {
-      const { message } = (await res.json().catch(() => ({}))) as { message?: string };
-      await tell({
-        title: t("That file was not accepted"),
-        description: message ?? t("Try a smaller file."),
-      });
+    const outcome = await uploadToCard(card.id, file);
+    if (outcome.ok) {
+      ingest(outcome.record);
       return;
     }
-    await refresh();
+    await tell({
+      title: t("That file was not accepted"),
+      description: outcome.message || t("Try a smaller file."),
+    });
   };
 
   /*

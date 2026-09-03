@@ -276,9 +276,9 @@ export const comment = pgTable(
 );
 
 /**
- * Link attachments only for now. File uploads need a storage adapter (local
- * volume by default, S3-compatible for Supabase Storage) and that lands with the
- * rest of M1's file handling.
+ * A link on a card, or one of our own uploaded files. An upload's `url` is
+ * `/api/files/<id>` with the same id as the row, and the bytes live behind the
+ * storage adapter under that key. Both kinds arrive through the mutation log.
  */
 export const attachment = pgTable(
   "attachment",

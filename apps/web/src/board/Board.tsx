@@ -9,6 +9,7 @@ import {
   type BoardState,
   type Card,
   type MutationBody,
+  type MutationRecord,
 } from "@pergola/shared";
 import { useDialogs } from "../lib/Dialogs.js";
 import { hexFor, avatarColor, initials } from "../lib/labels.js";
@@ -23,9 +24,10 @@ type Props = {
   state: BoardState;
   filter: Filter;
   groupBy: GroupBy;
-  apply: (body: MutationBody) => void;
-  /** Reload the board — an upload is written by the server, not by a mutation. */
-  refresh: () => Promise<void>;
+  /** Resolves once the server has confirmed the change, or refused it. */
+  apply: (body: MutationBody) => Promise<void>;
+  /** Take in a change the server committed for us — an upload, say. */
+  ingest: (rec: MutationRecord) => void;
   onOpenCard: (id: string) => void;
 };
 
@@ -55,10 +57,10 @@ const splitCell = (id: string) => {
   return { laneKey, listId };
 };
 
-export function Board({ state, filter, groupBy, apply, refresh, onOpenCard }: Props) {
+export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Props) {
   const t = useT();
   const pl = usePlural();
-  const { ask, confirm } = useDialogs();
+  const { ask, confirm, tell } = useDialogs();
   const lists = useMemo(() => orderedLists(state), [state]);
   const listById = useMemo(() => new Map(lists.map((l) => [l.id, l])), [lists]);
   const cardById = useMemo(() => new Map(state.cards.map((c) => [c.id, c])), [state.cards]);
@@ -290,9 +292,18 @@ export function Board({ state, filter, groupBy, apply, refresh, onOpenCard }: Pr
                       onShowMore={() =>
                         setRevealed((r) => ({ ...r, [id]: (r[id] ?? PAGE) + PAGE }))
                       }
-                      onAdd={(lid, title) => {
+                      onAdd={async (lid, title) => {
                         const cardId = crypto.randomUUID();
-                        apply({
+                        /*
+                         * Awaited, because a composer that drops a file on a
+                         * new card uploads to it next — and the upload is a
+                         * separate request that needs the card to exist by the
+                         * time it lands. Fired together they race, and on a
+                         * host that runs each request as its own function the
+                         * upload wins often enough that the picture just
+                         * silently never appears.
+                         */
+                        await apply({
                           kind: "card.create",
                           cardId,
                           listId: lid,
@@ -302,9 +313,19 @@ export function Board({ state, filter, groupBy, apply, refresh, onOpenCard }: Pr
                         return cardId;
                       }}
                       onAttach={async (cardId, files) => {
-                        for (const file of files) await uploadToCard(cardId, file);
-                        // The rows are the server's, so the board has to be re-read.
-                        await refresh();
+                        const refused: string[] = [];
+                        for (const file of files) {
+                          const outcome = await uploadToCard(cardId, file);
+                          if (outcome.ok) ingest(outcome.record);
+                          else refused.push(`${file.name}: ${outcome.message}`);
+                        }
+                        // A file that was quietly dropped is worse than a dialog.
+                        if (refused.length > 0) {
+                          await tell({
+                            title: t("That file was not accepted"),
+                            description: refused.join("\n"),
+                          });
+                        }
                       }}
                       onRenameList={(lid, title) =>
                         apply({ kind: "list.rename", listId: lid, title })

@@ -73,7 +73,7 @@ function Workspace({
   const here = boards?.find((b) => b.id === boardId) ?? null;
   const runsTheInstance = meRole === "owner" || meRole === "admin";
   const { ask, confirm, tell } = useDialogs();
-  const { state, live, pending, error, apply, undo, redo, canUndo, canRedo, refresh, dismissError } =
+  const { state, live, pending, error, apply, undo, redo, canUndo, canRedo, ingest, dismissError } =
     useBoard(boardId, meId);
 
   // A filter belongs to the board you set it on, not to the next one you open.
@@ -647,7 +647,7 @@ function Workspace({
           {view === "board" && (
             <Board
               state={state}
-              refresh={refresh}
+              ingest={ingest}
               filter={filter}
               groupBy={groupBy}
               apply={apply}
@@ -684,7 +684,7 @@ function Workspace({
           card={openCard}
           meId={meId}
           apply={apply}
-          refresh={refresh}
+          ingest={ingest}
           onClose={() => setOpenCardId(null)}
         />
       )}
