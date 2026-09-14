@@ -786,7 +786,16 @@ function Workspace({
       )}
 
       {state && boardId && settingsOpen && (
-        <Settings state={state} boardId={boardId} onClose={() => setSettingsOpen(false)} />
+        <Settings
+          state={state}
+          boardId={boardId}
+          onClose={() => setSettingsOpen(false)}
+          onDeleted={() => {
+            setSettingsOpen(false);
+            openBoard(null);
+            void loadBoards();
+          }}
+        />
       )}
 
       {state && archiveOpen && (

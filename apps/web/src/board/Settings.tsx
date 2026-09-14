@@ -9,6 +9,8 @@ type Props = {
   state: BoardState;
   boardId: string;
   onClose: () => void;
+  /** The board is gone; leave it. */
+  onDeleted: () => void;
 };
 
 type Tab = "activity" | "automation" | "webhooks" | "share" | "tokens";
@@ -24,7 +26,7 @@ type Hook = {
 
 type Token = { id: string; name: string; lastUsedAt: string | null; createdAt: string };
 
-export function Settings({ state, boardId, onClose }: Props) {
+export function Settings({ state, boardId, onClose, onDeleted }: Props) {
   const t = useT();
   const pl = usePlural();
   const locale = useDateLocale();
@@ -37,6 +39,25 @@ export function Settings({ state, boardId, onClose }: Props) {
   /** A freshly minted token, while the set-up dialog for an assistant is open. */
   const [connecting, setConnecting] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<"private" | "public" | null>(null);
+
+  const deleteBoard = async () => {
+    const ok = await confirm({
+      title: t("Delete {title}?", { title: state.title }),
+      description: t(
+        "Every list, card, comment and upload on it is deleted, along with its history. There is no undo — archive cards instead if anyone may want them back.",
+      ),
+      confirmLabel: t("Delete board"),
+      danger: true,
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/boards/${boardId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const { message } = (await res.json().catch(() => ({}))) as { message?: string };
+      await tell({ title: t("{title} was not deleted", { title: state.title }), description: message });
+      return;
+    }
+    onDeleted();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -398,6 +419,23 @@ export function Settings({ state, boardId, onClose }: Props) {
               {visibility === null && (
                 <p className="muted">{t("Publish to generate the link, or leave the board private.")}</p>
               )}
+
+              <div className="section-head">
+                <h3>{t("Delete this board")}</h3>
+              </div>
+              <p className="muted">
+                {t(
+                  "Every list, card, comment and upload on it is deleted, along with its history. There is no undo — archive cards instead if anyone may want them back.",
+                )}
+              </p>
+              <div className="setting-row">
+                <div className="setting-main">
+                  <strong>{state.title}</strong>
+                </div>
+                <button className="linkish danger" type="button" onClick={() => void deleteBoard()}>
+                  {t("Delete board")}
+                </button>
+              </div>
             </>
           )}
 

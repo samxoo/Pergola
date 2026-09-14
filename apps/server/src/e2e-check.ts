@@ -1521,6 +1521,34 @@ async function main() {
   });
   check(crossBoard.status === 409, "and a card id from another board cannot be reached");
 
+  /* ---------------------------------------------------- deleting a board */
+  section("Deleting a board");
+  const doomed = (await (await dana.post("/api/boards", { title: "Doomed" })).json()) as { id: string };
+  await dana.post(`/api/boards/${doomed.id}/members`, { userId: samId, role: "member" });
+  const memberDelete = await sam.request(`/api/boards/${doomed.id}`, "DELETE");
+  check(memberDelete.status === 403, "a member cannot delete a board");
+  const adminDelete = await dana.request(`/api/boards/${doomed.id}`, "DELETE");
+  check(adminDelete.status === 204, "its admin can");
+  const doomedNow = await dana.get(`/api/boards/${doomed.id}`);
+  check(doomedNow.status === 403 || doomedNow.status === 404, "and it is gone");
+  check(
+    !(await sam.json<{ id: string }[]>("/api/boards")).some((b) => b.id === doomed.id),
+    "for everyone who was on it",
+  );
+
+  const unattended = (await (await dana.post("/api/boards", { title: "Unattended" })).json()) as {
+    id: string;
+  };
+  const ownerDelete = await fetch(`${BASE}/api/boards/${unattended.id}`, {
+    method: "DELETE",
+    headers: { origin: BASE, cookie: adminCookie },
+  });
+  check(ownerDelete.status === 204, "whoever runs the instance can delete a board they were never on");
+  check(
+    !(await dana.json<{ id: string }[]>("/api/boards")).some((b) => b.id === unattended.id),
+    "and its admin no longer sees it",
+  );
+
   console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} FAILURE(S)`}\n`);
   process.exit(failures === 0 ? 0 : 1);
 }

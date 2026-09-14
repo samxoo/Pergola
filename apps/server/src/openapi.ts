@@ -440,6 +440,16 @@ export function openapi(): Json {
             404: problem("No such board."),
           },
         },
+        delete: {
+          tags: ["boards"],
+          summary: "Delete a board",
+          description:
+            "Everything on it goes too, history included, and there is no undo. For the board's admins, and for an owner or admin of the instance.",
+          responses: {
+            204: { description: "Gone." },
+            403: problem("Only an admin can delete a board."),
+          },
+        },
       },
       "/boards/{id}/since/{seq}": {
         parameters: [

@@ -1,5 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, like, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { MAX_BATCH, MutationEnvelope, atEnd, type BoardState } from "@pergola/shared";
@@ -21,6 +21,7 @@ import { exportBoard, importPergola, PergolaExport } from "../import/pergola.js"
 import { importTrello, TrelloExport } from "../import/trello.js";
 import { commitAndDispatchAll } from "../automation/dispatch.js";
 import { boardsFor, group, searchCards, snapshot } from "../boards/read.js";
+import { FILE_URL, storage } from "./files.js";
 import { since } from "../mutations/commit.js";
 import { Stale } from "../mutations/handlers.js";
 import {
@@ -269,6 +270,39 @@ export const boards = new Hono<Env>()
       return c.json({ userId, role: newRole }, 201);
     },
   )
+
+  /**
+   * Delete a board, and everything on it.
+   *
+   * For the board's admins, and for whoever runs the instance — an owner or
+   * admin sees every board and can remove one nobody is looking after. Rows go
+   * with the board by cascade, the log included: history belongs to the board,
+   * and a board that no longer exists has none. Uploaded bytes do not cascade,
+   * so they are removed afterwards and best effort. The row is the truth: a
+   * stray file on a volume costs kilobytes, whereas a board whose row survived
+   * a storage hiccup would be a phantom on everyone's home page.
+   *
+   * There is no undo. Archiving a card is the reversible action; this is the
+   * one for a board that should not be there at all.
+   */
+  .delete("/boards/:id", async (c) => {
+    const boardId = c.req.param("id");
+    const role = await authorizeRead(boardId, actorOf(c));
+    if (role !== "admin") return c.json({ message: "Only an admin can delete a board" }, 403);
+
+    const uploads = await db
+      .select({ id: attachment.id })
+      .from(attachment)
+      .innerJoin(card, eq(card.id, attachment.cardId))
+      .where(and(eq(card.boardId, boardId), like(attachment.url, `${FILE_URL}%`)));
+
+    await db.delete(board).where(eq(board.id, boardId));
+
+    for (const { id } of uploads) {
+      await storage.delete(id).catch((err) => console.error("[boards] orphaned upload", id, err));
+    }
+    return c.body(null, 204);
+  })
 
   .delete("/boards/:id/members/:userId", async (c) => {
     const boardId = c.req.param("id");

@@ -221,6 +221,26 @@ export function Admin({ meId, onClose, onOpenBoard }: Props) {
     await patchPerson(p, { active: true }, t("{name}'s ban was not lifted", { name: p.name }));
   };
 
+  /* -------------------------------------------------------------- boards -- */
+
+  const deleteBoard = async (b: BoardRow) => {
+    const ok = await confirm({
+      title: t("Delete {title}?", { title: b.title }),
+      description: t(
+        "Every list, card, comment and upload on it is deleted, along with its history. There is no undo — archive cards instead if anyone may want them back.",
+      ),
+      confirmLabel: t("Delete board"),
+      danger: true,
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/boards/${b.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      await complain(res, t("{title} was not deleted", { title: b.title }));
+      return;
+    }
+    await loadBoards();
+  };
+
   /* ------------------------------------------------------------- invites -- */
 
   const createInvite = async () => {
@@ -521,9 +541,14 @@ export function Admin({ meId, onClose, onOpenBoard }: Props) {
                       })}
                     </span>
                   </div>
-                  <button className="btn" type="button" onClick={() => onOpenBoard(b.id)}>
-                    {t("Open")}
-                  </button>
+                  <div className="setting-actions">
+                    <button className="linkish danger" type="button" onClick={() => void deleteBoard(b)}>
+                      {t("Delete")}
+                    </button>
+                    <button className="btn" type="button" onClick={() => onOpenBoard(b.id)}>
+                      {t("Open")}
+                    </button>
+                  </div>
                 </div>
               ))}
             </>

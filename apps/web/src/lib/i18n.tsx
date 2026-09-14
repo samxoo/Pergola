@@ -602,6 +602,12 @@ const ka: Record<string, string> = {
   "fired {count} times": "{count}-ჯერ გაეშვა",
   "On": "ჩართული",
   "Delete rule": "წესის წაშლა",
+  "Delete this board": "ამ დაფის წაშლა",
+  "Delete board": "დაფის წაშლა",
+  "Delete {title}?": "წავშალოთ {title}?",
+  "Every list, card, comment and upload on it is deleted, along with its history. There is no undo — archive cards instead if anyone may want them back.":
+    "მასზე არსებული ყველა სია, ბარათი, კომენტარი და ატვირთული ფაილი წაიშლება, ისტორიასთან ერთად. დაბრუნება შეუძლებელია — თუ ბარათები ვინმეს კიდევ დასჭირდება, სჯობს დაარქივოთ.",
+  "{title} was not deleted": "{title} არ წაიშალა",
   "Add a webhook": "ვებჰუკის დამატება",
   "Every change on this board is POSTed here, signed so you can verify it.":
     "ამ დაფის ყოველი ცვლილება იგზავნება აქ POST-ით, ხელმოწერით, რომ გადაამოწმო.",

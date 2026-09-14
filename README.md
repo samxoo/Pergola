@@ -240,7 +240,9 @@ its sessions and invalidates its API tokens, so that person is signed out
 everywhere at once rather than when a cookie eventually expires.
 
 *Admin → Boards* lists every board on the instance with its owner, member and
-card counts, and flags any board that has been made public.
+card counts, flags any board that has been made public, and can delete one.
+A board's own admins can do the same under *Settings → Share*. Everything on
+the board goes with it, history included, and there is no undo.
 
 Guardrails: an admin cannot create an owner, nobody can change their own role or
 deactivate themselves, and the instance always keeps at least one active owner.
