@@ -42,8 +42,8 @@ jobs:
 
       # The architecture's load-bearing claim — live sync, undo, idempotent
       # replay, reconnect-by-cursor — is asserted on every commit, not assumed.
-      # 83 checks: live sync, undo, roles, search, import, automation, webhooks,
-      # tokens, notifications and public boards.
+      # Live sync, undo, roles, search, import, automation, webhooks, tokens,
+      # notifications, public boards, atomic batches and the OpenAPI document.
       - name: prove the whole thing end to end
         run: |
           pnpm --filter @pergola/server db:migrate

@@ -279,6 +279,14 @@ export const MutationEnvelope = z.object({
 });
 export type MutationEnvelope = z.infer<typeof MutationEnvelope>;
 
+/**
+ * How many envelopes one request may carry when they must land together.
+ *
+ * Enough for anything a person or an assistant does to one card in one go, and
+ * small enough that a batch never holds a board's sequence lock for long.
+ */
+export const MAX_BATCH = 100;
+
 /** One row of the log, as the server hands it back. */
 export type MutationRecord = {
   id: string;

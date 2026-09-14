@@ -1408,6 +1408,84 @@ async function main() {
   const a2 = await dana.mutate(board.id, body, replayId);
   check(a1.seq === a2.seq, "replaying a mutation id is a no-op, not a second write");
 
+  // The same promise for a kind that creates something. A replayed create used
+  // to run the handler again before noticing the id, and die on the duplicate
+  // key — a 500 where the caller had been promised a no-op.
+  const createId = randomUUID();
+  const createBody: MutationBody = {
+    kind: "card.create",
+    cardId: randomUUID(),
+    listId: todo.id,
+    title: "Created once",
+    position: atEnd(null),
+  };
+  const c1 = await dana.mutate(board.id, createBody, createId);
+  const c2 = await dana.mutate(board.id, createBody, createId);
+  check(c1.seq === c2.seq, "replaying a card.create is a no-op too, not a duplicate-key error");
+
+  /* ------------------------------------------------------------ batches */
+  section("Batches");
+  const batchCard = randomUUID();
+  const batchRes = await dana.post("/api/mutations", [
+    {
+      id: randomUUID(),
+      boardId: board.id,
+      body: { kind: "card.create", cardId: batchCard, listId: todo.id, title: "Batched", position: atEnd(null) },
+    },
+    { id: randomUUID(), boardId: board.id, body: { kind: "card.rename", cardId: batchCard, title: "Batched, renamed" } },
+    { id: randomUUID(), boardId: board.id, body: { kind: "card.archive", cardId: batchCard, archived: true } },
+  ]);
+  const applied = (await batchRes.json()) as MutationRecord[];
+  check(batchRes.status === 201 && applied.length === 3, "a batch of three lands as three records");
+  check(
+    applied.every((r, i) => i === 0 || r.seq === applied[i - 1]!.seq + 1),
+    "with consecutive sequence numbers — nothing else interleaved",
+  );
+
+  const seqBefore = (await dana.json<BoardState>(`/api/boards/${board.id}`)).seq;
+  const broken = await dana.post("/api/mutations", [
+    { id: randomUUID(), boardId: board.id, body: { kind: "card.rename", cardId: batchCard, title: "Should not stick" } },
+    { id: randomUUID(), boardId: board.id, body: { kind: "card.rename", cardId: randomUUID(), title: "ghost" } },
+  ]);
+  const afterBroken = await dana.json<BoardState>(`/api/boards/${board.id}`);
+  check(broken.status === 409, "a batch with one stale reference is refused as a whole");
+  check(
+    afterBroken.seq === seqBefore &&
+      afterBroken.cards.find((x) => x.id === batchCard)?.title === "Batched, renamed",
+    "and the good half was rolled back with it",
+  );
+
+  const sneaked = randomUUID();
+  const observerBatch = await sam.post("/api/mutations", [
+    { id: randomUUID(), boardId: board.id, body: { kind: "comment.create", commentId: sneaked, cardId: batchCard, body: "allowed alone" } },
+    { id: randomUUID(), boardId: board.id, body: { kind: "card.rename", cardId: batchCard, title: "not allowed" } },
+  ]);
+  const afterObserver = await dana.json<BoardState>(`/api/boards/${board.id}`);
+  check(observerBatch.status === 403, "an observer's batch is refused if any part of it is");
+  check(
+    !afterObserver.comments.some((m) => m.id === sneaked),
+    "and the part they could have sent alone did not land either",
+  );
+
+  const twoBoards = await dana.post("/api/mutations", [
+    { id: randomUUID(), boardId: board.id, body: { kind: "card.rename", cardId: batchCard, title: "A" } },
+    { id: randomUUID(), boardId: randomUUID(), body: { kind: "card.rename", cardId: batchCard, title: "B" } },
+  ]);
+  check(twoBoards.status === 400, "a batch naming two boards is a 400 before anything is tried");
+
+  const empty = await dana.post("/api/mutations", []);
+  check(empty.status === 400, "an empty batch is malformed, not a silent success");
+
+  /* ------------------------------------------------------------ openapi */
+  section("OpenAPI");
+  const spec = await fetch(`${BASE}/api/openapi.json`);
+  const doc = (await spec.json()) as {
+    paths: Record<string, unknown>;
+    components: { schemas: Record<string, unknown> };
+  };
+  check(spec.status === 200 && "/mutations" in doc.paths, "the API describes itself, without signing in");
+  check("CardRename" in doc.components.schemas, "with every mutation kind as a named schema");
+
   ws.close();
   const before = a1.seq;
   await dana.mutate(board.id, {

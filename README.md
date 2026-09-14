@@ -55,8 +55,9 @@ instead of being built separately:
 | Audit trail | The same rows, queried differently |
 | Offline editing | Queue locally, replay on reconnect |
 
-Because every write goes through one path, a change made by an automation rule
-is logged, undoable and streamed exactly like one made by a person.
+Because every change to a board goes through one path, a change made by an
+automation rule is logged, undoable and streamed exactly like one made by a
+person.
 
 ## Features
 
@@ -79,7 +80,7 @@ by text, label, member and due state, and a command palette.
 finished, move the card and post a comment. Unmetered.
 
 **Integrations.** API tokens, a REST API over the same endpoints the interface
-uses, and signed outbound webhooks.
+uses, an OpenAPI document, and signed outbound webhooks.
 
 **Administration.** Instance roles, invitations, a people directory, and
 immediate revocation when someone leaves.
@@ -285,7 +286,7 @@ curl -H "Authorization: Bearer prg_..." https://your-host/api/boards
 # Read a board, including every card
 curl -H "Authorization: Bearer prg_..." https://your-host/api/boards/<board-id>
 
-# Change something. Every write goes through this one endpoint.
+# Change something. Every change to a board's contents goes through this one endpoint.
 curl -X POST https://your-host/api/mutations \
   -H "Authorization: Bearer prg_..." \
   -H "content-type: application/json" \
@@ -294,13 +295,35 @@ curl -X POST https://your-host/api/mutations \
         "boardId": "<board-id>",
         "body": { "kind": "card.rename", "cardId": "<card-id>", "title": "New title" }
       }'
+
+# Several changes that must land together: send an array. It is applied as
+# one atomic change — all of it or none of it — and answered with an array.
+curl -X POST https://your-host/api/mutations \
+  -H "Authorization: Bearer prg_..." \
+  -H "content-type: application/json" \
+  -d '[
+        { "id": "<uuid>", "boardId": "<board-id>",
+          "body": { "kind": "card.rename", "cardId": "<card-id>", "title": "Ship it" } },
+        { "id": "<uuid>", "boardId": "<board-id>",
+          "body": { "kind": "card.move", "cardId": "<card-id>", "toListId": "<list-id>", "position": "a1" } }
+      ]'
 ```
 
 The `id` you supply is an idempotency key. Sending the same mutation twice is a
 no-op, so a request that times out can be retried without first checking whether
-it landed.
+it landed. For anything that creates something — a card, a list, a comment — you
+also mint the new thing's id, which is what lets a client show it before the
+server answers. `position` is a fractional-index string: read the board and
+place the new item between its neighbours' positions, or after the last one.
 
-Mutation kinds are defined in `packages/shared/src/mutations.ts`.
+Boards themselves, membership, tokens, webhooks and automation rules are not
+board contents and so are ordinary REST: `POST /api/boards`,
+`DELETE /api/boards/<id>/members/<user-id>`, and so on.
+
+The whole surface is described at `GET /api/openapi.json`, generated from the
+same Zod schemas the server validates with, so Postman, an OpenAPI code
+generator or an assistant can read it. Mutation kinds are defined in
+`packages/shared/src/mutations.ts`.
 
 ## AI assistants (MCP)
 
@@ -397,13 +420,13 @@ pnpm dev                      # server on :3000, client on :5173
 | `pnpm build` | Build shared, then the client, then the server |
 | `pnpm -r typecheck` | Typecheck every package |
 | `pnpm --filter @pergola/shared test` | Ordering and reducer tests |
-| `pnpm --filter @pergola/server test` | Storage, signing and schema tests |
+| `pnpm --filter @pergola/server test` | Storage, signing, schema and OpenAPI tests |
 | `pnpm --filter @pergola/server check` | End-to-end checks against a running server |
 | `pnpm db:generate` | Generate a migration after changing the schema |
 
-The end-to-end suite covers live sync, undo, roles, search, import and export,
-automation, webhooks, tokens, notifications, file uploads, public boards and
-instance administration. CI runs all of it plus a production build.
+The end-to-end suite covers live sync, undo, idempotent replay, atomic batches,
+roles, search, import and export, automation, webhooks, tokens, notifications,
+file uploads, public boards and instance administration. CI runs all of it plus a production build.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. The short
 version: every change to a board goes through the mutation log, and nothing

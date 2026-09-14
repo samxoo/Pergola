@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { MutationEnvelope, atEnd, type BoardState } from "@pergola/shared";
+import { MAX_BATCH, MutationEnvelope, atEnd, type BoardState } from "@pergola/shared";
 import { db } from "../db/index.js";
 import {
   attachment,
@@ -19,7 +19,7 @@ import {
 } from "../db/schema.js";
 import { exportBoard, importPergola, PergolaExport } from "../import/pergola.js";
 import { importTrello, TrelloExport } from "../import/trello.js";
-import { commitAndDispatch } from "../automation/dispatch.js";
+import { commitAndDispatchAll } from "../automation/dispatch.js";
 import { boardsFor, group, searchCards, snapshot } from "../boards/read.js";
 import { since } from "../mutations/commit.js";
 import { Stale } from "../mutations/handlers.js";
@@ -32,6 +32,12 @@ import {
   runsInstance,
   type Env,
 } from "../auth/guard.js";
+
+/** One change, or several that must land together. */
+export const MutationInput = z.union([
+  MutationEnvelope,
+  z.array(MutationEnvelope).min(1).max(MAX_BATCH),
+]);
 
 /** The six a board starts with, so labelling works before anyone configures it. */
 const STARTER_LABELS = ["green", "yellow", "orange", "red", "purple", "blue"];
@@ -407,14 +413,35 @@ export const boards = new Hono<Env>()
     return c.json(await since(id, seq));
   })
 
-  /** The only write endpoint in the application. */
-  .post("/mutations", zValidator("json", MutationEnvelope), async (c) => {
-    const envelope = c.req.valid("json");
+  /**
+   * The only endpoint that changes a board's contents.
+   *
+   * One envelope, or an array of them applied as a single atomic change: every
+   * mutation in the array lands or none does, in one transaction under one
+   * sequence lock. A caller changing three things on a card sends three
+   * envelopes and never has to reason about the second failing after the first.
+   * The response has the shape of the request — a record for an envelope, an
+   * array of records for an array — so a client that sends one is unchanged.
+   */
+  .post("/mutations", zValidator("json", MutationInput), async (c) => {
+    const input = c.req.valid("json");
+    const batch = Array.isArray(input);
+    const envelopes = batch ? input : [input];
     const actor = actorOf(c);
+
+    const boardId = envelopes[0]!.boardId;
+    if (envelopes.some((e) => e.boardId !== boardId)) {
+      return c.json({ message: "A batch must stay on one board" }, 400);
+    }
+
     try {
-      await authorizeWrite(envelope.boardId, actor, envelope.body.kind);
-      const record = await commitAndDispatch(envelope, actor.id);
-      return c.json(record, 201);
+      // Authorise every kind before applying any: a batch an observer may not
+      // send should be refused whole, not applied up to the first refusal.
+      for (const kind of new Set(envelopes.map((e) => e.body.kind))) {
+        await authorizeWrite(boardId, actor, kind);
+      }
+      const records = await commitAndDispatchAll(envelopes, actor.id);
+      return c.json(batch ? records : records[0], 201);
     } catch (err) {
       if (err instanceof Forbidden) return c.json({ message: err.message }, 403);
       // A stale reference means someone else already moved or removed the thing.

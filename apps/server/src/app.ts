@@ -18,6 +18,7 @@ import { integrations } from "./routes/integrations.js";
 import { publicBoards } from "./routes/public.js";
 import { stream } from "./routes/stream.js";
 import { mcp } from "./mcp/route.js";
+import { openapi } from "./openapi.js";
 
 /**
  * The application, and nothing else.
@@ -82,6 +83,11 @@ function health(c: Context) {
 // and /api/health is reachable on a host that only routes /api to the function.
 app.get("/health", health);
 app.get("/api/health", health);
+
+// The API, described, for Postman, code generators and people. Unauthenticated
+// on purpose: it is what the README says, in a form a tool can read, and it
+// names no instance data.
+app.get("/api/openapi.json", (c) => c.json(openapi()));
 
 /*
  * Who may create an account.

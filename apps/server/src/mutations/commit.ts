@@ -16,58 +16,113 @@ export async function commit(
   actorId: string | null,
   ruleId: string | null = null,
 ): Promise<MutationRecord> {
-  return db.transaction(async (tx) => {
-    const seq = await nextSeq(tx, env.boardId);
+  const [record] = await commitAll([env], actorId, ruleId);
+  return record!;
+}
 
-    // The handler mutates rows and hands back the mutation that undoes it.
-    const handler = handlers[env.body.kind] as (
-      tx: Tx,
-      boardId: string,
-      body: typeof env.body,
-      actorId: string | null,
-    ) => Promise<MutationRecord["inverse"]>;
-    const inverse = await handler(tx, env.boardId, env.body, actorId);
+/**
+ * Several mutations as one change.
+ *
+ * One transaction, one row lock, one notification: either every envelope lands
+ * or none does. That is what lets a caller change three fields on a card without
+ * the second one failing and leaving the first behind. Envelopes must name the
+ * same board — the per-board lock is what serialises writers, and taking two
+ * boards' locks in caller-chosen order is how deadlocks start.
+ */
+export async function commitAll(
+  envs: readonly MutationEnvelope[],
+  actorId: string | null,
+  ruleId: string | null = null,
+): Promise<MutationRecord[]> {
+  if (envs.length === 0) return [];
+  const boardId = envs[0]!.boardId;
+  if (envs.some((e) => e.boardId !== boardId)) {
+    throw new Error("A batch must stay on one board");
+  }
 
-    const [row] = await tx
-      .insert(mutation)
-      .values({
-        id: env.id,
-        boardId: env.boardId,
-        seq,
-        actorId,
-        kind: env.body.kind,
-        payload: env.body,
-        inverse,
-        ruleId,
-      })
-      // Replay of an offline queue, or a retry after a timeout, lands here and
-      // does nothing. That is what makes a network timeout unambiguous.
-      .onConflictDoNothing({ target: mutation.id })
-      .returning();
+  try {
+    return await db.transaction(async (tx) => {
+      const out: MutationRecord[] = [];
+      let last: number | null = null;
+      for (const env of envs) {
+        const applied = await applyOne(tx, env, actorId, ruleId);
+        out.push(applied.record);
+        if (applied.fresh) last = applied.record.seq;
+      }
+      // NOTIFY fires on commit, not on statement — so a listener can never
+      // observe a change that later rolls back. The payload carries only the
+      // cursor: subscribers fetch everything after theirs, so one notification
+      // for the whole batch is exact. It is capped at 8000 bytes anyway.
+      if (last !== null) {
+        await tx.execute(
+          sql`SELECT pg_notify('board_changed', ${JSON.stringify({ boardId, seq: last })})`,
+        );
+      }
+      return out;
+    });
+  } catch (err) {
+    // Two identical requests raced: the other one won the insert after this
+    // one had already applied the handler. Its work is rolled back with the
+    // transaction, and the answer is the row that did land.
+    if (err instanceof AlreadyApplied) return commitAll(envs, actorId, ruleId);
+    throw err;
+  }
+}
 
-    if (!row) {
-      // Already applied under this id. Return the row that is already there so
-      // the caller still gets a coherent answer.
-      const [existing] = await tx
-        .select()
-        .from(mutation)
-        .where(eq(mutation.id, env.id))
-        .limit(1);
-      return toRecord(existing!);
-    }
+/** Thrown inside the transaction to undo a handler that a concurrent twin beat. */
+class AlreadyApplied extends Error {}
 
-    // NOTIFY fires on commit, not on statement — so a listener can never observe
-    // a change that later rolls back. The payload carries only the cursor; it is
-    // capped at 8000 bytes and the rows are the source of truth anyway.
-    await tx.execute(
-      sql`SELECT pg_notify('board_changed', ${JSON.stringify({
-        boardId: env.boardId,
-        seq,
-      })})`,
-    );
+/**
+ * Apply one envelope inside an open transaction.
+ *
+ * The id check comes *before* the handler runs. An idempotency key that is only
+ * honoured on insert is not one: by then the handler has already changed rows,
+ * and for a `card.create` replay that is a duplicate primary key — a 500 where
+ * the caller was promised a no-op. Looking first is what makes a retry after a
+ * timeout genuinely free, for every kind and not only the ones that happen to
+ * be harmless twice.
+ */
+async function applyOne(
+  tx: Tx,
+  env: MutationEnvelope,
+  actorId: string | null,
+  ruleId: string | null,
+): Promise<{ record: MutationRecord; fresh: boolean }> {
+  const [existing] = await tx
+    .select()
+    .from(mutation)
+    .where(eq(mutation.id, env.id))
+    .limit(1);
+  if (existing) return { record: toRecord(existing), fresh: false };
 
-    return toRecord(row);
-  });
+  const seq = await nextSeq(tx, env.boardId);
+
+  // The handler mutates rows and hands back the mutation that undoes it.
+  const handler = handlers[env.body.kind] as (
+    tx: Tx,
+    boardId: string,
+    body: typeof env.body,
+    actorId: string | null,
+  ) => Promise<MutationRecord["inverse"]>;
+  const inverse = await handler(tx, env.boardId, env.body, actorId);
+
+  const [row] = await tx
+    .insert(mutation)
+    .values({
+      id: env.id,
+      boardId: env.boardId,
+      seq,
+      actorId,
+      kind: env.body.kind,
+      payload: env.body,
+      inverse,
+      ruleId,
+    })
+    .onConflictDoNothing({ target: mutation.id })
+    .returning();
+
+  if (!row) throw new AlreadyApplied();
+  return { record: toRecord(row), fresh: true };
 }
 
 /**

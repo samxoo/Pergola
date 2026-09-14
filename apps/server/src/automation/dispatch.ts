@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { MutationEnvelope, MutationRecord } from "@pergola/shared";
-import { commit } from "../mutations/commit.js";
+import { commit, commitAll } from "../mutations/commit.js";
 import { runRules } from "./engine.js";
 import { notifyFor } from "./notify.js";
 import { deliver } from "./webhooks.js";
@@ -27,7 +27,27 @@ export async function commitAndDispatch(
   ruleId: string | null = null,
 ): Promise<MutationRecord> {
   const record = await commit(env, actorId, ruleId);
+  await dispatch(record);
+  return record;
+}
 
+/**
+ * A batch: committed as one change, then dispatched one record at a time.
+ *
+ * The transaction is the atomic part. What follows it is not, and should not
+ * be — a rule that fires on the second record of three must see the first two
+ * already applied, exactly as it would had they arrived one request apart.
+ */
+export async function commitAndDispatchAll(
+  envs: readonly MutationEnvelope[],
+  actorId: string | null,
+): Promise<MutationRecord[]> {
+  const records = await commitAll(envs, actorId);
+  for (const record of records) await dispatch(record);
+  return records;
+}
+
+async function dispatch(record: MutationRecord): Promise<void> {
   const [rules, notes] = await Promise.allSettled([
     runRules(record, (body, onBehalfOf, firedRuleId) =>
       commitAndDispatch(
@@ -42,6 +62,4 @@ export async function commitAndDispatch(
   if (notes.status === "rejected") console.error("[dispatch] notifications failed:", notes.reason);
 
   await background(deliver(record), "dispatch: webhook delivery");
-
-  return record;
 }
