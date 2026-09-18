@@ -10,8 +10,12 @@ import {
   type Card,
   type Comment,
   type CustomField,
+  type Member,
   type MutationBody,
   type MutationRecord,
+  MENTION_RE,
+  handleNames,
+  mentionHandle,
 } from "@pergola/shared";
 import { useDialogs } from "../lib/Dialogs.js";
 import { uploadToCard } from "../lib/upload.js";
@@ -20,6 +24,7 @@ import { InlineEdit } from "../lib/InlineEdit.js";
 import { LABEL_NAMES, avatarColor, hexFor, initials } from "../lib/labels.js";
 import { useT, useDateLocale } from "../lib/i18n.js";
 import { Icon } from "../lib/Icon.js";
+import { formatExact, formatWhen } from "../lib/time.js";
 
 type Props = {
   state: BoardState;
@@ -743,6 +748,7 @@ export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props)
               </button>
             </div>
             <AddComment
+              members={state.members}
               replyingTo={replyTo ? nameOf(memberById.get(replyTo.authorId), t) : null}
               onCancelReply={() => setReplyTo(null)}
               onSend={(body) => {
@@ -760,6 +766,7 @@ export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props)
               <div key={root.id} className="thread">
                 <CommentRow
                   comment={root}
+                  members={state.members}
                   author={memberById.get(root.authorId)}
                   meId={meId}
                   onReply={() => setReplyTo(root)}
@@ -772,6 +779,7 @@ export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props)
                       <CommentRow
                         key={r.id}
                         comment={r}
+                        members={state.members}
                         author={memberById.get(r.authorId)}
                         meId={meId}
                         /* A reply to a reply joins this thread rather than nesting again. */
@@ -807,15 +815,8 @@ export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props)
                 {card.createdAt && (
                   <>
                     {" · "}
-                    <time
-                      dateTime={card.createdAt}
-                      title={new Date(card.createdAt).toLocaleString(locale)}
-                    >
-                      {new Date(card.createdAt).toLocaleDateString(locale, {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })}
+                    <time dateTime={card.createdAt} title={formatExact(card.createdAt, locale)}>
+                      {formatWhen(card.createdAt, t, locale)}
                     </time>
                   </>
                 )}
@@ -1013,6 +1014,7 @@ function nameOf(
  */
 function CommentRow({
   comment: cm,
+  members,
   author,
   meId,
   onReply,
@@ -1020,6 +1022,7 @@ function CommentRow({
   onDelete,
 }: {
   comment: Comment;
+  members: Member[];
   author: { id: string; name: string; email: string } | undefined;
   meId: string | null;
   onReply: () => void;
@@ -1044,8 +1047,14 @@ function CommentRow({
       <div className="comment-body">
         <div className="comment-meta">
           <strong>{who}</strong>
-          <span className="muted mono">{when(cm.createdAt, t, locale)}</span>
-          {cm.editedAt && <span className="muted">{t("edited")}</span>}
+          <time className="muted mono" dateTime={cm.createdAt} title={formatExact(cm.createdAt, locale)}>
+            {formatWhen(cm.createdAt, t, locale)}
+          </time>
+          {cm.editedAt && (
+            <span className="muted" title={formatExact(cm.editedAt, locale)}>
+              {t("edited")}
+            </span>
+          )}
         </div>
         <InlineEdit
           value={cm.body}
@@ -1054,7 +1063,11 @@ function CommentRow({
           multiline
           ariaLabel={t("Comment")}
         >
-          {(open) => <p onDoubleClick={mine ? open : undefined}>{cm.body}</p>}
+          {(open) => (
+            <p onDoubleClick={mine ? open : undefined}>
+              <MentionText body={cm.body} members={members} />
+            </p>
+          )}
         </InlineEdit>
         <div className="comment-actions">
           <button className="linkish" type="button" onClick={onReply}>
@@ -1071,11 +1084,54 @@ function CommentRow({
   );
 }
 
+/**
+ * A comment's text with the people in it marked.
+ *
+ * Only a handle that names someone on this board gets the treatment; an email
+ * address or a stray "@" stays plain text, since nobody will be told about it.
+ */
+function MentionText({ body, members }: { body: string; members: Member[] }) {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of body.matchAll(MENTION_RE)) {
+    const at = m.index ?? 0;
+    const handle = m[1]!;
+    const who = members.find((p) => handleNames(handle, p));
+    if (!who) continue;
+    if (at > last) parts.push(body.slice(last, at));
+    parts.push(
+      <span key={at} className="mention" title={who.name || who.email}>
+        @{handle}
+      </span>,
+    );
+    last = at + m[0].length;
+  }
+  if (last < body.length) parts.push(body.slice(last));
+  return <>{parts}</>;
+}
+
+/** The "@query" under the caret, if the caret sits in one. */
+function mentionAtCaret(text: string, caret: number): { start: number; query: string } | null {
+  const before = text.slice(0, caret);
+  const at = before.lastIndexOf("@");
+  if (at < 0) return null;
+  // An "@" mid-word is an address or a typo, not a mention.
+  if (at > 0 && !/\s/.test(before[at - 1]!)) return null;
+  const query = before.slice(at + 1);
+  if (/\s/.test(query)) return null;
+  return { start: at, query };
+}
+
+/** How many people the picker offers at once. */
+const MENTION_ROWS = 6;
+
 function AddComment({
+  members,
   onSend,
   replyingTo,
   onCancelReply,
 }: {
+  members: Member[];
   onSend: (body: string) => void;
   /** Whose comment is being answered, or null when starting a new thread. */
   replyingTo: string | null;
@@ -1084,12 +1140,57 @@ function AddComment({
   const t = useT();
   const [body, setBody] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
+  /** Where the "@" being typed starts, and what follows it so far. */
+  const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
+  const [active, setActive] = useState(0);
 
   // Choosing Reply should put the cursor where the reply gets typed, rather
   // than leaving a banner on screen and the person hunting for the box.
   useEffect(() => {
     if (replyingTo) box.current?.focus();
   }, [replyingTo]);
+
+  /*
+   * The people the typed handle could mean. Matched against the name, the
+   * handle and the address, so "@gri", "@sam" and "@grigol@" all find Grigol.
+   */
+  const candidates = mention
+    ? members
+        .filter((m) => {
+          const q = mention.query.toLowerCase();
+          if (!q) return true;
+          return (
+            m.name.toLowerCase().includes(q) ||
+            mentionHandle(m).toLowerCase().includes(q) ||
+            m.email.toLowerCase().startsWith(q)
+          );
+        })
+        .slice(0, MENTION_ROWS)
+    : [];
+  const picking = mention !== null && candidates.length > 0;
+
+  /** Read the caret and decide whether the picker should be up. */
+  const track = (el: HTMLTextAreaElement) => {
+    const next = mentionAtCaret(el.value, el.selectionStart ?? el.value.length);
+    setMention(next);
+    if (!next || next.start !== mention?.start) setActive(0);
+  };
+
+  /** Put "@handle " in place of what was typed, and carry on after it. */
+  const pick = (who: Member) => {
+    if (!mention) return;
+    const el = box.current;
+    const caret = el?.selectionStart ?? body.length;
+    const inserted = `@${mentionHandle(who)} `;
+    const next = body.slice(0, mention.start) + inserted + body.slice(caret);
+    setBody(next);
+    setMention(null);
+    const at = mention.start + inserted.length;
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(at, at);
+    });
+  };
 
   return (
     <form
@@ -1100,6 +1201,7 @@ function AddComment({
         if (!b) return;
         onSend(b);
         setBody("");
+        setMention(null);
       }}
     >
       {replyingTo && (
@@ -1110,29 +1212,98 @@ function AddComment({
           </button>
         </div>
       )}
-      <textarea
-        ref={box}
-        rows={2}
-        value={body}
-        placeholder={replyingTo ? t("Write a reply") : t("Write a comment")}
-        onChange={(e) => setBody(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            e.currentTarget.form?.requestSubmit();
-          }
-          // Escape leaves reply mode before it reaches the drawer and closes it.
-          if (e.key === "Escape" && replyingTo) {
-            e.stopPropagation();
-            onCancelReply();
-          }
-        }}
-        aria-label={replyingTo ? t("Write a reply") : t("Write a comment")}
-      />
+      <div className="compose-wrap">
+        <textarea
+          ref={box}
+          rows={2}
+          value={body}
+          placeholder={replyingTo ? t("Write a reply") : t("Write a comment")}
+          onChange={(e) => {
+            setBody(e.target.value);
+            track(e.target);
+          }}
+          onClick={(e) => track(e.currentTarget)}
+          onKeyUp={(e) => {
+            // Arrow keys move the caret; the picker follows it. The keys the
+            // picker itself uses are handled on the way down and skipped here.
+            if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) track(e.currentTarget);
+          }}
+          onBlur={() => {
+            // Let a click on a row land before the list goes away.
+            setTimeout(() => setMention(null), 120);
+          }}
+          onKeyDown={(e) => {
+            if (picking) {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActive((i) => (i + 1) % candidates.length);
+                return;
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive((i) => (i - 1 + candidates.length) % candidates.length);
+                return;
+              }
+              if (e.key === "Enter" || e.key === "Tab") {
+                e.preventDefault();
+                pick(candidates[active] ?? candidates[0]!);
+                return;
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                setMention(null);
+                return;
+              }
+            }
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+            // Escape leaves reply mode before it reaches the drawer and closes it.
+            if (e.key === "Escape" && replyingTo) {
+              e.stopPropagation();
+              onCancelReply();
+            }
+          }}
+          aria-label={replyingTo ? t("Write a reply") : t("Write a comment")}
+          aria-autocomplete="list"
+          aria-expanded={picking}
+          aria-controls={picking ? "mention-picker" : undefined}
+        />
+        {picking && (
+          <div id="mention-picker" className="mention-menu" role="listbox" aria-label={t("Mention someone")}>
+            {candidates.map((m, i) => {
+              const label = m.name || m.email;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="option"
+                  aria-selected={i === active}
+                  className={`mention-item${i === active ? " active" : ""}`}
+                  onMouseEnter={() => setActive(i)}
+                  // mousedown, not click: the textarea's blur would close the list first.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pick(m);
+                  }}
+                >
+                  <span className="chip avatar small" style={{ background: avatarColor(m.id) }} aria-hidden="true">
+                    {initials(label)}
+                  </span>
+                  <span className="mention-name">{label}</span>
+                  <span className="muted mono">@{mentionHandle(m)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
       <div className="add-comment-foot">
         <span className="muted">
           <kbd>⌘</kbd>
-          <kbd>Enter</kbd> {t("to post")}
+          <kbd>Enter</kbd> {t("to post")} · <kbd>@</kbd> {t("to mention")}
         </span>
         <button className="btn primary" type="submit" disabled={!body.trim()}>
           {replyingTo ? t("Reply") : t("Comment")}
@@ -1181,15 +1352,3 @@ function hostOf(url: string): string {
   }
 }
 
-function when(
-  iso: string,
-  t: (k: string, p?: Record<string, string | number>) => string,
-  locale: string | undefined,
-): string {
-  const then = new Date(iso).getTime();
-  const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 1) return t("just now");
-  if (mins < 60) return t("{count}m ago", { count: mins });
-  if (mins < 60 * 24) return t("{count}h ago", { count: Math.round(mins / 60) });
-  return new Date(iso).toLocaleDateString(locale, { month: "short", day: "numeric" });
-}

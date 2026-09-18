@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { describe, type MutationBody } from "@pergola/shared";
 import { avatarColor, initials } from "../lib/labels.js";
 import { useT, useDateLocale } from "../lib/i18n.js";
+import { formatExact, formatWhen } from "../lib/time.js";
 
 export type Entry = {
   id: string;
@@ -68,23 +69,11 @@ export function Activity({ boardId, cardId, cursor }: Props) {
             {/* A rule acts on behalf of whoever set it off — say which. */}
             {e.ruleName && <em className="via-rule"> {t("via {name}", { name: e.ruleName })}</em>}
           </span>
-          <span className="muted mono activity-when" title={new Date(e.createdAt).toLocaleString(locale)}>
-            {when(e.createdAt, t, locale)}
-          </span>
+          <time className="muted mono activity-when" dateTime={e.createdAt} title={formatExact(e.createdAt, locale)}>
+            {formatWhen(e.createdAt, t, locale)}
+          </time>
         </div>
       ))}
     </div>
   );
-}
-
-function when(
-  iso: string,
-  t: (k: string, p?: Record<string, string | number>) => string,
-  locale: string | undefined,
-): string {
-  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return t("now");
-  if (mins < 60) return `${mins}m`;
-  if (mins < 1440) return `${Math.round(mins / 60)}h`;
-  return new Date(iso).toLocaleDateString(locale, { month: "short", day: "numeric" });
 }

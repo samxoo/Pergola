@@ -1780,3 +1780,43 @@ button.brand:focus-visible { outline: 2px solid var(--beam); outline-offset: 3px
 .connect-facts dt { color: var(--muted); font-size: 12px; }
 .connect-facts dd { margin: 0; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .connect-facts code { font-size: 12px; overflow-wrap: anywhere; }
+
+/* ---- @mentions ----------------------------------------------------------- */
+
+/* The composer needs a box for the picker to hang from. */
+.compose-wrap { position: relative; }
+.compose-wrap textarea { display: block; }
+
+/* People the typed "@" could mean, under the box, keyboard first. */
+.mention-menu {
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(100% + 4px);
+  z-index: 21;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--drag);
+  display: flex; flex-direction: column; gap: 1px;
+  animation: menu-pop 0.13s var(--spring);
+}
+.mention-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; text-align: left;
+  border: 0; background: none; color: inherit;
+  padding: 6px 8px; border-radius: 7px;
+  font: inherit; font-size: 13px; cursor: pointer;
+}
+.mention-item.active { background: var(--surface-2); }
+.mention-item .mention-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mention-item .muted.mono { font-size: 11px; flex: none; }
+
+/* A person named in a comment, set off from the prose around them. */
+.mention {
+  color: var(--beam);
+  background: var(--beam-wash);
+  border-radius: 4px;
+  padding: 0 3px;
+  font-weight: 600;
+}

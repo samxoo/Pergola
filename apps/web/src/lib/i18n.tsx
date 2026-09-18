@@ -502,6 +502,9 @@ const ka: Record<string, string> = {
   "just now": "ახლა",
   "{count}m ago": "{count} წთ წინ",
   "{count}h ago": "{count} სთ წინ",
+  "Yesterday": "გუშინ",
+  "to mention": "ვინმეს მოსახსენიებლად",
+  "Mention someone": "ვინმეს მოხსენიება",
 
   // — Activity —
   "Nothing has happened yet.": "ჯერ არაფერი მომხდარა.",

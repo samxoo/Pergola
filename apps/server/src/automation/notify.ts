@@ -1,5 +1,5 @@
 import { and, eq, ne } from "drizzle-orm";
-import type { MutationRecord } from "@pergola/shared";
+import { handleNames, mentionedHandles, type MutationRecord } from "@pergola/shared";
 import { db } from "../db/index.js";
 import { boardMember, card, notification, user, watch } from "../db/schema.js";
 
@@ -11,9 +11,6 @@ import { boardMember, card, notification, user, watch } from "../db/schema.js";
  * hear about cards you have some stake in — ones you were assigned, commented
  * on, or were named in.
  */
-
-/** @mentions, matched against display names and the local part of an email. */
-const MENTION = /@([\w][\w.-]{1,63})/g;
 
 /** Assigning someone, or commenting, subscribes them to the card. */
 async function subscribe(userId: string, cardId: string): Promise<void> {
@@ -54,22 +51,19 @@ async function push(
  * account meant "@alice" on a private board notified any Alice anywhere, handing
  * a stranger the card's title — and doubling as a way to test whether a given
  * name or address has an account here.
+ *
+ * What counts as a handle, and how one names a person, is shared with the web
+ * composer so the picker only ever inserts something this will find.
  */
 async function resolveMentions(body: string, boardId: string): Promise<string[]> {
-  const handles = [...body.matchAll(MENTION)].map((m) => m[1]!.toLowerCase());
+  const handles = mentionedHandles(body);
   if (handles.length === 0) return [];
   const people = await db
     .select({ id: user.id, name: user.name, email: user.email })
     .from(user)
     .innerJoin(boardMember, eq(boardMember.userId, user.id))
     .where(eq(boardMember.boardId, boardId));
-  return people
-    .filter((p) => {
-      const local = p.email.split("@")[0]?.toLowerCase() ?? "";
-      const handle = p.name.replace(/\s+/g, "").toLowerCase();
-      return handles.includes(local) || handles.includes(handle);
-    })
-    .map((p) => p.id);
+  return people.filter((p) => handles.some((h) => handleNames(h, p))).map((p) => p.id);
 }
 
 const titleOf = async (cardId: string): Promise<string> => {
