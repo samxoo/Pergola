@@ -25,6 +25,7 @@ import { LABEL_NAMES, avatarColor, hexFor, initials } from "../lib/labels.js";
 import { useT, useDateLocale } from "../lib/i18n.js";
 import { Icon } from "../lib/Icon.js";
 import { formatExact, formatWhen } from "../lib/time.js";
+import { displayName, usePeople } from "../lib/people.js";
 
 type Props = {
   state: BoardState;
@@ -62,9 +63,9 @@ export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props)
   const attachments = attachmentsFor(state, card.id);
   const threads = commentThreads(state, card.id);
   const memberById = new Map(state.members.map((m) => [m.id, m]));
-  // A member's current name first; the name recorded at creation if they left.
-  const maker = card.createdBy ? memberById.get(card.createdBy) : undefined;
-  const makerName = maker ? maker.name || maker.email : card.createdByName;
+  // Named even when not a member: an admin who never joined, someone who left.
+  const people = usePeople();
+  const makerName = displayName(people(card.createdBy)) ?? card.createdByName;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -749,7 +750,7 @@ export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props)
             </div>
             <AddComment
               members={state.members}
-              replyingTo={replyTo ? nameOf(memberById.get(replyTo.authorId), t) : null}
+              replyingTo={replyTo ? nameOf(people(replyTo.authorId), t) : null}
               onCancelReply={() => setReplyTo(null)}
               onSend={(body) => {
                 apply({
@@ -767,7 +768,7 @@ export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props)
                 <CommentRow
                   comment={root}
                   members={state.members}
-                  author={memberById.get(root.authorId)}
+                  author={people(root.authorId)}
                   meId={meId}
                   onReply={() => setReplyTo(root)}
                   onEdit={(body) => apply({ kind: "comment.edit", commentId: root.id, body })}
@@ -780,7 +781,7 @@ export function CardDrawer({ state, card, meId, apply, ingest, onClose }: Props)
                         key={r.id}
                         comment={r}
                         members={state.members}
-                        author={memberById.get(r.authorId)}
+                        author={people(r.authorId)}
                         meId={meId}
                         /* A reply to a reply joins this thread rather than nesting again. */
                         onReply={() => setReplyTo(root)}

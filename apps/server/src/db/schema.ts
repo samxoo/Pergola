@@ -443,7 +443,9 @@ export const notification = pgTable(
       .notNull()
       .references(() => board.id, { onDelete: "cascade" }),
     cardId: uuid("card_id").references(() => card.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"mention" | "assigned" | "commented" | "moved" | "due">().notNull(),
+    kind: text("kind")
+      .$type<"mention" | "assigned" | "commented" | "moved" | "due" | "added">()
+      .notNull(),
     /** Denormalised on purpose: a notification should survive its card. */
     body: text("body").notNull(),
     actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
@@ -451,6 +453,28 @@ export const notification = pgTable(
     createdAt: now(),
   },
   (t) => [index("notification_user_idx").on(t.userId, t.createdAt)],
+);
+
+/**
+ * A browser that asked to be told, even with Pergola closed.
+ *
+ * One row per device, not per person: the endpoint is the browser's own push
+ * address, so the same person on a laptop and a phone is two rows. A push the
+ * browser's service answers with "gone" deletes its row.
+ */
+export const pushSubscription = pgTable(
+  "push_subscription",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: now(),
+  },
+  (t) => [index("push_subscription_user_idx").on(t.userId)],
 );
 
 /**

@@ -18,7 +18,10 @@ export type IconName =
   | "undo"
   | "redo"
   | "boards"
-  | "import";
+  | "import"
+  | "search"
+  | "inbox"
+  | "back";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   tag: (
@@ -81,6 +84,19 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M2.8 10.8v1.4a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-1.4" />
     </>
   ),
+  search: (
+    <>
+      <circle cx="7" cy="7" r="4.2" />
+      <path d="m10.1 10.1 3.3 3.3" />
+    </>
+  ),
+  inbox: (
+    <>
+      <path d="M2.6 9.2 4.4 3.6a1 1 0 0 1 .95-.7h5.3a1 1 0 0 1 .95.7l1.8 5.6" />
+      <path d="M2.6 9.2v3a1.2 1.2 0 0 0 1.2 1.2h8.4a1.2 1.2 0 0 0 1.2-1.2v-3h-3.1l-.9 1.6H6.6l-.9-1.6H2.6Z" />
+    </>
+  ),
+  back: <path d="M9.8 3.4 5.2 8l4.6 4.6" />,
 };
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {

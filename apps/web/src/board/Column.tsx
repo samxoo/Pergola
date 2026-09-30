@@ -6,6 +6,7 @@ import { useDialogs } from "../lib/Dialogs.js";
 import { InlineEdit } from "../lib/InlineEdit.js";
 import { useT } from "../lib/i18n.js";
 import { filesFrom } from "../lib/upload.js";
+import { useMedia } from "../lib/useMedia.js";
 import { Card } from "./Card.js";
 
 type Props = {
@@ -54,6 +55,7 @@ export function Column({
 }: Props) {
   const t = useT();
   const { ask } = useDialogs();
+  const touch = useMedia("(pointer: coarse)");
   // Kanban's actual central idea, which Trello never shipped without a Power-Up.
   const overWip = list.wipLimit !== null && cards.length > list.wipLimit;
   const { ref, isDragging, isDropTarget } = useSortable({
@@ -82,7 +84,14 @@ export function Column({
           ariaLabel={t("Rename {title}", { title: list.title })}
         >
           {(open) => (
-            <span className="column-title" onDoubleClick={open} title={t("Double-click to rename")}>
+            // A double tap is the browser's zoom, not a double-click, so on a
+            // touch screen one tap renames. A long press still drags the list.
+            <span
+              className="column-title"
+              onDoubleClick={open}
+              onClick={touch ? open : undefined}
+              title={t("Double-click to rename")}
+            >
               {list.title}
             </span>
           )}

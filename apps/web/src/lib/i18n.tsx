@@ -134,6 +134,7 @@ const ka: Record<string, string> = {
   "How teammates will see you": "როგორ დაგინახავენ გუნდის წევრები",
   "Sign in": "შესვლა",
   "Sign out": "გასვლა",
+  "Language": "ენა",
   "Close": "დახურვა",
   "Please try again.": "გთხოვთ, სცადოთ თავიდან.",
 
@@ -564,6 +565,15 @@ const ka: Record<string, string> = {
   "Notifications": "შეტყობინებები",
   "Inbox": "შემოსული",
   "Nothing yet.": "ჯერ არაფერია.",
+  "Get a notification when you are mentioned or a card is added, even with Pergola closed.":
+    "მიიღეთ შეტყობინება, როცა მოგნიშნავენ ან ბარათი დაემატება — Pergola-ს დახურვის შემთხვევაშიც.",
+  "Turn on": "ჩართვა",
+  "Turn off": "გამორთვა",
+  "Notifications are on for this device.": "ამ მოწყობილობაზე შეტყობინებები ჩართულია.",
+  "Notifications are blocked for this site. Allow them in your browser's site settings to hear about mentions and new cards.":
+    "ამ საიტისთვის შეტყობინებები დაბლოკილია. დაუშვით ისინი ბრაუზერის საიტის პარამეტრებში, რომ გაიგოთ მონიშვნებისა და ახალი ბარათების შესახებ.",
+  "To get notifications on an iPhone or iPad, tap Share → Add to Home Screen, then open Pergola from there.":
+    "iPhone-ზე ან iPad-ზე შეტყობინებების მისაღებად დააჭირეთ „გაზიარება“ → „მთავარ ეკრანზე დამატება“ და გახსენით Pergola იქიდან.",
 
   // — TimelineView —
   "Earlier": "უფრო ადრე",

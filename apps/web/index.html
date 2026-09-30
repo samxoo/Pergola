@@ -2,7 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- resizes-content: an on-screen keyboard shrinks the page rather than
+         covering it, so the box being typed into stays in view. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#fbfcfd" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#171c27" media="(prefers-color-scheme: dark)" />
+    <!-- Installable, so an iPhone can add it to the home screen — the only
+         place iOS lets a web app send notifications from. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Pergola</title>
     <!-- Latin display + body, and a proper Georgian face so ქართული renders
          in a real font instead of the OS fallback. Geist covers Latin; Noto

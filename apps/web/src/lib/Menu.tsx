@@ -10,11 +10,14 @@ export function Menu({
   label,
   title,
   align = "left",
+  triggerClassName = "btn icon-only",
   children,
 }: {
   label: React.ReactNode;
   title?: string;
   align?: "left" | "right";
+  /** The button's look. An outline button unless the label is its own shape. */
+  triggerClassName?: string;
   children: (close: () => void) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -31,9 +34,10 @@ export function Menu({
   return (
     <div className="menuwrap">
       <button
-        className="btn icon-only"
+        className={triggerClassName}
         type="button"
         title={title}
+        aria-label={title}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -43,11 +47,7 @@ export function Menu({
       {open && (
         <>
           <div className="menu-backdrop" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div
-            className="menu-panel"
-            role="menu"
-            style={align === "right" ? { left: "auto", right: 0 } : undefined}
-          >
+          <div className={`menu-panel${align === "right" ? " right" : ""}`} role="menu">
             {children(() => setOpen(false))}
           </div>
         </>

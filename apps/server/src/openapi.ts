@@ -113,6 +113,7 @@ const Comment = z.object({
   id: z.string(),
   cardId: z.string(),
   authorId: z.string(),
+  authorName: nullable(z.string()),
   body: z.string(),
   parentId: nullable(z.string()),
   createdAt: iso,

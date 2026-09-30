@@ -94,6 +94,12 @@ export type Comment = {
   id: string;
   cardId: string;
   authorId: string;
+  /**
+   * The author's name as the database had it when the board was read, for an
+   * author who is not a member: an instance admin who never joined the board,
+   * or someone who has left it. Null on a comment that arrived live.
+   */
+  authorName: string | null;
   body: string;
   /** The comment this answers, or null for one that starts a thread. */
   parentId: string | null;
@@ -434,6 +440,7 @@ export function reduce(state: BoardState, body: MutationBody, meta: Meta): Board
             id: body.commentId,
             cardId: body.cardId,
             authorId: meta.actorId ?? "",
+            authorName: null,
             body: body.body,
             parentId: body.parentId ?? null,
             createdAt: meta.at,

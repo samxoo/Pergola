@@ -16,6 +16,7 @@ import { boards } from "./routes/boards.js";
 import { files } from "./routes/files.js";
 import { integrations } from "./routes/integrations.js";
 import { publicBoards } from "./routes/public.js";
+import { push } from "./routes/push.js";
 import { stream } from "./routes/stream.js";
 import { mcp } from "./mcp/route.js";
 import { openapi } from "./openapi.js";
@@ -151,6 +152,7 @@ const api = app
   .route("/api", boards)
   .route("/api", integrations)
   .route("/api", files)
+  .route("/api", push)
   .route("/api", stream);
 
 export type AppType = typeof api;

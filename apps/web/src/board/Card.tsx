@@ -9,6 +9,8 @@ import {
 } from "@pergola/shared";
 import { avatarColor, hexFor, initials } from "../lib/labels.js";
 import { useT, useDateLocale } from "../lib/i18n.js";
+import { formatExact, formatWhen } from "../lib/time.js";
+import { displayName, usePeople } from "../lib/people.js";
 
 type Props = {
   state: BoardState;
@@ -21,6 +23,8 @@ type Props = {
 
 export function Card({ state, card, index, columnId, onOpen }: Props) {
   const t = useT();
+  const locale = useDateLocale();
+  const people = usePeople();
   const { ref, isDragging } = useSortable({
     id: card.id,
     index,
@@ -48,6 +52,9 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
   /* A picture is the fastest thing to recognise in a list of cards. */
   const preview = coverImageFor(state, card.id);
   const attachments = attachmentsFor(state, card.id);
+  // Anyone the board can name — a member, an admin who never joined, someone
+  // who left — and the name recorded at creation for anyone else.
+  const makerName = displayName(people(card.createdBy)) ?? card.createdByName;
 
   return (
     <article
@@ -95,7 +102,31 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
       <div className="card-title">{card.title}</div>
 
       <div className="card-meta">
-        <span className="card-no mono">PRG-{card.number}</span>
+        {/*
+          * Who put the card here and when, to the minute — the question a list
+          * of cards actually gets asked. The PRG number is a reference, and it
+          * stays in the card itself, the table and search; on the face it is
+          * shown only for a card old enough to have no record of its making.
+          */}
+        {card.createdAt ? (
+          <span
+            className="card-by"
+            title={`${makerName ? t("Created by {name}", { name: makerName }) : t("Created by someone no longer here")} · ${formatExact(card.createdAt, locale)}`}
+          >
+            <span
+              className="chip avatar small"
+              style={{ background: card.createdBy ? avatarColor(card.createdBy) : "var(--muted)" }}
+              aria-hidden="true"
+            >
+              {initials(makerName ?? "?")}
+            </span>
+            <time dateTime={card.createdAt}>
+              {formatWhen(card.createdAt, t, locale)}
+            </time>
+          </span>
+        ) : (
+          <span className="card-no mono">PRG-{card.number}</span>
+        )}
 
         {card.dueAt && <Due dueAt={card.dueAt} />}
 

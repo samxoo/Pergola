@@ -118,6 +118,10 @@ button { font: inherit; color: inherit; }
   padding-left: 14px;
   border-left: 1px solid var(--line);
   color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .spacer { flex: 1; }
@@ -260,6 +264,15 @@ button { font: inherit; color: inherit; }
   color: var(--muted);
 }
 .card-no { letter-spacing: 0.02em; }
+
+/*
+ * Who added the card and when. The avatar is a size down from the assignees'
+ * on the right, so the byline never reads as one more person on the card.
+ */
+.card-meta { flex-wrap: wrap; row-gap: 4px; }
+.card-by { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.card-by .chip.avatar.small { width: 16px; height: 16px; font-size: 7.5px; }
+.card-by time { font-size: 11px; font-variant-numeric: tabular-nums; }
 
 .card-del {
   margin-left: auto;
@@ -416,11 +429,13 @@ kbd {
 
 .board-select {
   max-width: 190px;
+  /* The first thing in the bar to give way when it runs short of room. */
+  min-width: 0;
   appearance: none;
   padding-right: 26px;
   background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
     linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-  background-position: calc(100% - 14px) 12px, calc(100% - 9px) 12px;
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
   background-size: 5px 5px;
   background-repeat: no-repeat;
 }
@@ -1174,6 +1189,8 @@ kbd {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  /* The weekday names take the height they need; the weeks share the rest. */
+  grid-template-rows: auto;
   grid-auto-rows: minmax(84px, 1fr);
   gap: 1px;
   background: var(--line);
@@ -1267,6 +1284,24 @@ kbd {
   padding: 5px;
 }
 .bell-empty { padding: 18px 12px; margin: 0; font-size: 13.5px; }
+
+/* This device's push switch, above the list. */
+.push-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 4px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.push-row.off { background: var(--beam-wash); border: 0; border-radius: 4px; }
+.push-row.off > span:first-child { flex: 1 1 200px; }
+.push-row .btn { padding: 4px 11px; font-size: 12.5px; }
+.push-problem { flex: 1 1 100%; color: var(--rust); font-size: 12px; }
 
 .bell-row {
   display: flex;
@@ -1429,12 +1464,7 @@ kbd {
   to   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .drawer.modal { animation: none; } }
-@media (max-width: 640px) {
-  .drawer.modal {
-    inset: 0; width: 100vw; max-height: 100vh; height: 100%;
-    border-radius: 0; transform: none;
-  }
-}
+/* On a phone the card takes the whole screen — see "small screens" at the end. */
 
 /* ---- board-actions overflow menu ---- */
 .menuwrap { position: relative; display: inline-flex; }
@@ -1455,6 +1485,7 @@ kbd {
   gap: 1px;
   animation: menu-pop 0.13s var(--spring);
 }
+.menu-panel.right { left: auto; right: 0; }
 @keyframes menu-pop { from { transform: translateY(-4px); opacity: 0; } to { transform: none; opacity: 1; } }
 .menu-item {
   display: flex; align-items: center; gap: 10px;
@@ -1469,6 +1500,7 @@ kbd {
 .menu-item .mi-ic { width: 17px; text-align: center; opacity: 0.85; flex: none; font-size: 14px; }
 .menu-sep { height: 1px; background: var(--line-soft); margin: 5px 2px; }
 .btn.icon-only { padding: 6px 10px; font-size: 15px; line-height: 1; font-weight: 700; letter-spacing: 0.06em; }
+.btn.icon-only > .ic { display: block; }
 
 /* ---- collapsible filter bar: shown only on demand ---- */
 .filter-toggle.on { border-color: var(--beam); color: var(--beam); background: var(--beam-wash); }
@@ -1667,7 +1699,17 @@ button.attach-thumb:hover { border-color: var(--beam); transform: translateY(-1p
  * phone is two columns of nothing.
  */
 @media (max-width: 860px) {
-  .drawer.modal .drawer-body { grid-template-columns: 1fr; }
+  /*
+   * And one column means one scroller. Two stacked ones inside a clipped box
+   * left the conversation cut off under a long card, with no way to reach it.
+   */
+  .drawer.modal .drawer-body {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .drawer.modal .drawer-main,
+  .drawer.modal .drawer-side { overflow: visible; }
   .drawer.modal .drawer-side {
     border-left: 0;
     border-top: 1px solid var(--line-soft);
@@ -1819,4 +1861,226 @@ button.brand:focus-visible { outline: 2px solid var(--beam); outline-offset: 3px
   border-radius: 4px;
   padding: 0 3px;
   font-weight: 600;
+}
+
+/* ---- the account menu (phones) ------------------------------------------- */
+
+/* Your own initials: the one control on a phone's top bar that is about you. */
+.account-btn {
+  display: inline-flex;
+  border: 0;
+  background: none;
+  padding: 2px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex: none;
+}
+.account-btn .chip.avatar { width: 30px; height: 30px; font-size: 11px; }
+.account-btn:focus-visible { outline: 2px solid var(--beam); outline-offset: 2px; }
+
+.menu-head {
+  padding: 6px 10px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-lang {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 4px 10px 6px;
+  font-size: 13px;
+}
+
+/* ============================================================ small screens ====
+ * Phones, tablets upright, and narrow windows. The board stays a board — bays
+ * side by side, swiped through one at a time — and everything around it gets
+ * out of the way: chrome folds up, controls that hid behind hover are shown,
+ * and fields are big enough that iOS does not zoom the page to type in them.
+ *
+ * Widths: 860 the card loses its second column (above), 720 the top bar folds
+ * (`COMPACT` in lib/useMedia.ts), 560 a phone held upright.
+ */
+
+/* Double-tap is zoom on a phone, and an app's buttons are not for zooming into. */
+html { touch-action: manipulation; }
+
+@media (max-width: 720px) {
+  .topbar { gap: 6px; padding: 0 10px; }
+  .topbar .btn.icon-only { padding-inline: 8px; }
+  /* The board's name is the title here: it gets the room the rest gave up. */
+  .board-select { flex: 0 1 auto; max-width: none; }
+
+  /* Popovers hang from the top bar, not from a button that may sit mid-screen. */
+  .topbar .menu-panel { position: fixed; top: 58px; left: 10px; right: auto; max-width: calc(100vw - 20px); }
+  .topbar .menu-panel.right { left: auto; right: 10px; }
+  .bell-panel {
+    position: fixed;
+    top: 58px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: 70vh;
+    max-height: calc(100dvh - 72px);
+  }
+
+  /* Views across the top, the rest of the bar underneath. */
+  .viewbar { flex-wrap: wrap; gap: 8px; padding: 7px 10px; }
+  .viewbar .viewtabs { flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
+  .viewbar .viewtabs::-webkit-scrollbar { display: none; }
+  .viewbar .viewtab { flex: 1 0 auto; padding: 6px 10px; white-space: nowrap; }
+
+  .filterbar { gap: 8px; padding: 8px 10px; }
+  .filter-text { flex: 1 1 100%; width: auto; }
+  .filter-group { flex-wrap: wrap; }
+
+  /*
+   * One bay at a time, with the next one showing at the edge so it is plain
+   * there is more to swipe to. Snapping lets go while something is dragged:
+   * it would pull against the board's own auto-scroll.
+   */
+  .board {
+    gap: 10px;
+    padding: 10px 10px 14px;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 10px;
+  }
+  .lane.bare .board { padding-top: 10px; }
+  .boardscroll.dragging .board { scroll-snap-type: none; }
+  .column { width: min(300px, calc(100vw - 56px)); scroll-snap-align: start; }
+  .composer.addlist { scroll-snap-align: start; }
+  .lane-head { padding: 10px 10px 2px; }
+
+  .cardtable td { padding: 8px 10px; }
+  .th-sort,
+  .cardtable thead th:not(:has(.th-sort)) { padding: 9px 10px; }
+  .cell-title { min-width: 180px; }
+}
+
+@media (max-width: 640px) {
+  /* The card is the whole screen: no margin to tap past, nothing behind to read. */
+  .drawer.modal {
+    inset: 0;
+    width: auto;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    transform: none;
+    animation: sheet-up 0.2s var(--spring);
+  }
+  .drawer.modal .drawer-body { flex: 1; }
+}
+/* The centred pop animates a translate the full-screen card does not have. */
+@keyframes sheet-up { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) { .drawer.modal { animation: none; } }
+
+@media (max-width: 560px) {
+  .drawer-head { padding: 10px 12px; }
+  .drawer-body { padding: 14px 14px 48px; }
+  .drawer.modal .drawer-main { padding: 14px 14px 20px; }
+  .drawer.modal .drawer-side { padding: 14px 14px 32px; }
+  .drawer-title { font-size: 19px; }
+  .date-row { flex-direction: column; }
+
+  /* Settings and the admin console: tabs scroll, and a row's controls wrap under it. */
+  .settings-tabs { overflow-x: auto; scrollbar-width: none; padding: 8px 12px; }
+  .settings-tabs::-webkit-scrollbar { display: none; }
+  .settings-tabs .viewtab { flex: none; white-space: nowrap; }
+  .setting-row { flex-wrap: wrap; row-gap: 8px; }
+  .setting-main { flex-basis: 200px; }
+  .archived-row { flex-wrap: wrap; row-gap: 6px; }
+  .archived-main { flex-basis: 220px; }
+
+  .dialog {
+    padding: 18px 16px;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+  }
+  .dialog-actions { flex-wrap: wrap; }
+
+  .palette {
+    top: 12px;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+
+  .lightbox { padding: 12px; }
+  .lightbox img { max-width: calc(100vw - 24px); max-height: 80vh; }
+  .lightbox-close { top: 10px; right: 10px; }
+
+  /* A month still reads as a month: seven narrow days rather than a sideways scroll. */
+  .calendar { padding: 10px 10px 12px; }
+  .cal-head { flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .cal-head .spacer { display: none; }
+  .cal-head > .muted { flex: 1 1 100%; font-size: 12px; }
+  .cal-month { min-width: 0; font-size: 15px; }
+  .cal-grid { grid-auto-rows: minmax(64px, 1fr); }
+  .cal-weekday { padding: 5px 2px; text-align: center; font-size: 9.5px; letter-spacing: 0.02em; }
+  .cal-day { padding: 3px; gap: 2px; }
+  .cal-card { padding: 2px 3px; gap: 3px; font-size: 10px; border-radius: 2px; }
+
+  .gate { padding: 60px 14px 24px; }
+  .gate-card { padding: 24px 20px; }
+  .gate-lang { top: 12px; right: 12px; }
+}
+
+/* The smallest phones still in use: every pixel of the bar goes to the name. */
+@media (max-width: 380px) {
+  .topbar { gap: 4px; padding: 0 8px; }
+  .topbar .btn.icon-only { padding-inline: 7px; }
+  .board-select { padding-left: 9px; padding-right: 22px; background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%; }
+}
+
+/* ---- touch --------------------------------------------------------------- */
+
+@media (hover: none) {
+  /* Nothing hovers, so what waited for a hover is simply there. */
+  .list-del,
+  .item .icon-btn,
+  .comment .icon-btn,
+  .attach-row .icon-btn,
+  .field-row .icon-btn { opacity: 0.7; }
+
+  /* A tap leaves :hover stuck on; a card should not stay lifted after it. */
+  .card:not([data-dragging="true"]):hover {
+    transform: none;
+    border-color: var(--line-soft);
+    box-shadow: var(--lift);
+  }
+}
+
+@media (pointer: coarse) {
+  /*
+   * iOS zooms the whole page into any field set smaller than 16px, and leaves
+   * it zoomed after. The sizes above are chosen per field, hence !important.
+   */
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
+  textarea,
+  select { font-size: 16px !important; }
+  .drawer-title-edit { font-size: 19px !important; }
+
+  /* A fingertip, not a cursor: every control gets a target worth aiming at. */
+  .btn, .viewtab { min-height: 36px; }
+  .icon-btn { min-width: 32px; min-height: 32px; }
+  .drawer-head .icon-btn { font-size: 22px; }
+  .list-del { min-width: 28px; min-height: 28px; font-size: 18px; }
+  .count { padding: 3px 8px; }
+  .composer button { padding: 10px; }
+  .menu-item, .palette-row, .bell-row, .mention-item { min-height: 42px; }
+  .filter-label { width: 30px; height: 22px; }
+  .item input[type="checkbox"] { width: 20px; height: 20px; }
+  .langopt { padding: 7px 10px; }
+
+  /* Shortcut hints are for a keyboard this device probably does not have. */
+  .composer-hint, .palette-foot { display: none; }
+
+  /* A long press picks a card up. It must not select the text or pop the callout. */
+  .card, .column-head, .cal-card {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
 }

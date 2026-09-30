@@ -278,7 +278,8 @@ export function Board({ state, filter, groupBy, apply, ingest, onOpenCard }: Pro
         clearDrag();
       }}
     >
-      <div className="boardscroll">
+      {/* `dragging` lets go of scroll snapping, which would fight the auto-scroll. */}
+      <div className={`boardscroll${draggingCardId || draggingColumn ? " dragging" : ""}`}>
         {lanes.map((lane) => {
           const laneCount = lists.reduce(
             (n, l) => n + (cardsByCell[cellId(lane.key, l.id)]?.length ?? 0),

@@ -115,7 +115,10 @@ function detail(state: BoardState, c: Card) {
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map((m) => ({
         id: m.id,
-        author: memberName(state, m.authorId),
+        // Not "someone who has left" for an admin who commented without joining.
+        author: state.members.some((x) => x.id === m.authorId)
+          ? memberName(state, m.authorId)
+          : (m.authorName ?? memberName(state, m.authorId)),
         at: m.createdAt,
         body: m.body,
         ...(m.parentId ? { reply_to: m.parentId } : {}),

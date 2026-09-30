@@ -185,7 +185,53 @@
 .home-empty p { margin: 0 0 18px; }
 .home-empty-actions { display: flex; justify-content: center; gap: 10px; }
 
+/*
+ * Narrow: the rail turns into a strip of its actions along the top. The tiles
+ * already list the boards, but creating, importing and the admin console have
+ * no other door on the home page, so the strip keeps those.
+ */
 @media (max-width: 760px) {
-  .home-side { display: none; }
-  .home-main { padding: 22px 18px 50px; }
+  .home { flex-direction: column; }
+  .home-side {
+    width: auto;
+    flex-direction: row;
+    gap: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .home-side::-webkit-scrollbar { display: none; }
+  .home-side .side-group,
+  .home-side .side-board,
+  .home-side .side-item.on { display: none; }
+  .side-item {
+    flex: none;
+    white-space: nowrap;
+    padding: 7px 12px;
+    border: 1px solid var(--line-soft);
+    border-radius: 999px;
+    background: var(--surface);
+    font-size: 13px;
+  }
+  .home-main { padding: 18px 14px 40px; }
+  .home-section { margin-bottom: 28px; }
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(min(100%, 232px), 1fr)); gap: 10px; }
+  .home-empty-actions { flex-wrap: wrap; }
+}
+
+/* A phone: one board per row, its colour a band down the side. */
+@media (max-width: 480px) {
+  .tiles { grid-template-columns: minmax(0, 1fr); }
+  .tile { flex-direction: row; }
+  .tile-cover { width: 58px; height: auto; flex: none; }
+  .tile-beams { background-position: 11px 0; }
+  .tile-body { flex: 1; justify-content: center; padding: 11px 13px; }
+  .tile.create { flex-direction: row; min-height: 60px; }
+}
+
+@media (hover: none) {
+  .tile:hover { transform: none; box-shadow: var(--float); }
 }

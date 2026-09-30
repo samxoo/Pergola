@@ -7,7 +7,7 @@ import { RuleInput } from "@pergola/shared";
 import { BlockedAddress, resolvePublic } from "../automation/ssrf.js";
 import { db } from "../db/index.js";
 import { env } from "../env.js";
-import { apiToken, board, notification, rule, webhook } from "../db/schema.js";
+import { apiToken, board, notification, rule, user, webhook } from "../db/schema.js";
 import {
   actorOf,
   type Actor,
@@ -226,20 +226,24 @@ export const integrations = new Hono<Env>()
   /* ------------------------------------------------------ notifications */
 
   .get("/notifications", async (c) => {
+    // The actor's name is joined here: the inbox spans every board, so the one
+    // open in the browser cannot be relied on to know who everyone is.
     const rows = await db
-      .select()
+      .select({ n: notification, actorName: user.name })
       .from(notification)
+      .leftJoin(user, eq(user.id, notification.actorId))
       .where(eq(notification.userId, actorOf(c).id))
       .orderBy(desc(notification.createdAt))
       .limit(50);
     return c.json(
-      rows.map((n) => ({
+      rows.map(({ n, actorName }) => ({
         id: n.id,
         boardId: n.boardId,
         cardId: n.cardId,
         kind: n.kind,
         body: n.body,
         actorId: n.actorId,
+        actorName,
         read: n.readAt !== null,
         createdAt: n.createdAt.toISOString(),
       })),

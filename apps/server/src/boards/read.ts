@@ -139,10 +139,13 @@ export async function snapshot(id: string): Promise<BoardState | null> {
           .where(inArray(checklistItem.checklistId, checklistIds))
           .orderBy(asc(checklistItem.position))
       : [],
+    // The author's name rides along, as a card's maker's does: they may not be
+    // a member — an instance admin who never joined, or someone who has left.
     cardIds.length
       ? db
-          .select()
+          .select({ c: comment, authorName: user.name })
           .from(comment)
+          .leftJoin(user, eq(user.id, comment.authorId))
           .where(inArray(comment.cardId, cardIds))
           .orderBy(asc(comment.createdAt))
       : [],
@@ -223,10 +226,11 @@ export async function snapshot(id: string): Promise<BoardState | null> {
       addedBy: a.addedBy,
       createdAt: a.createdAt.toISOString(),
     })),
-    comments: comments.map((m) => ({
+    comments: comments.map(({ c: m, authorName }) => ({
       id: m.id,
       cardId: m.cardId,
       authorId: m.authorId,
+      authorName,
       body: m.body,
       parentId: m.parentId,
       createdAt: m.createdAt.toISOString(),

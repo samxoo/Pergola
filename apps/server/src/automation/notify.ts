@@ -1,15 +1,18 @@
 import { and, eq, ne } from "drizzle-orm";
 import { handleNames, mentionedHandles, type MutationRecord } from "@pergola/shared";
 import { db } from "../db/index.js";
-import { boardMember, card, notification, user, watch } from "../db/schema.js";
+import { board, boardMember, card, notification, user, watch } from "../db/schema.js";
+import { background } from "../runtime.js";
+import { pushTo } from "./webpush.js";
 
 /**
- * In-app notifications.
+ * Notifications: the bell in the app, and a push to any device that asked.
  *
  * Two rules keep this from becoming noise, which is the only way a notification
- * feature ever fails: you are never told about your own actions, and you only
- * hear about cards you have some stake in — ones you were assigned, commented
- * on, or were named in.
+ * feature ever fails: you are never told about your own actions, and what you
+ * hear about is either your board growing — a new card on a board you are on —
+ * or a card you have some stake in: one you were assigned, commented on, or
+ * were named in.
  */
 
 /** Assigning someone, or commenting, subscribes them to the card. */
@@ -34,7 +37,7 @@ async function push(
   row: {
     boardId: string;
     cardId: string | null;
-    kind: "mention" | "assigned" | "commented" | "moved" | "due";
+    kind: "mention" | "assigned" | "commented" | "moved" | "due" | "added";
     body: string;
     actorId: string | null;
   },
@@ -42,6 +45,32 @@ async function push(
   const unique = [...new Set(userIds)].filter((id) => id !== row.actorId);
   if (unique.length === 0) return;
   await db.insert(notification).values(unique.map((userId) => ({ userId, ...row })));
+
+  /*
+   * The same words on the lock screen, under the board's name. Sent in the
+   * background: a push service taking its time must not hold up the change.
+   */
+  await background(
+    pushTo(unique, async () => {
+      const [who] = row.actorId
+        ? await db.select({ name: user.name }).from(user).where(eq(user.id, row.actorId)).limit(1)
+        : [];
+      const [where] = await db
+        .select({ title: board.title })
+        .from(board)
+        .where(eq(board.id, row.boardId))
+        .limit(1);
+      return {
+        title: where?.title ?? "Pergola",
+        body: `${who?.name || "Someone"} ${row.body}`,
+        url: `/b/${row.boardId}${row.cardId ? `?card=${row.cardId}` : ""}`,
+        // A burst of new cards is one notification that keeps updating, not a
+        // stack of them; anything about a particular card replaces its own last.
+        tag: row.kind === "added" ? `added:${row.boardId}` : `card:${row.cardId ?? row.boardId}`,
+      };
+    }),
+    "notify: web push",
+  );
 }
 
 /**
@@ -75,6 +104,25 @@ const titleOf = async (cardId: string): Promise<string> => {
 export async function notifyFor(record: MutationRecord): Promise<void> {
   const b = record.body;
   const actor = record.actorId;
+
+  // Everyone on the board hears that it grew. Imports do not come through here.
+  if (b.kind === "card.create") {
+    const members = await db
+      .select({ userId: boardMember.userId })
+      .from(boardMember)
+      .where(eq(boardMember.boardId, record.boardId));
+    await push(
+      members.map((m) => m.userId),
+      {
+        boardId: record.boardId,
+        cardId: b.cardId,
+        kind: "added",
+        body: `added “${b.title}”`,
+        actorId: actor,
+      },
+    );
+    return;
+  }
 
   if (b.kind === "card.assign" && b.on) {
     await subscribe(b.userId, b.cardId);

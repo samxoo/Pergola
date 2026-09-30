@@ -220,3 +220,26 @@
   .timeline .tl-bar { transition: none; }
   .timeline .tl-bar[data-dragging="true"] { transform: none; }
 }
+
+/* ---- small screens ------------------------------------------------------- */
+
+@media (max-width: 560px) {
+  .timeline { padding: 10px 10px 12px; }
+  .timeline .tl-head { flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .timeline .tl-head .spacer { display: none; }
+  .timeline .tl-head > .muted { flex: 1 1 100%; font-size: 12px; }
+  .timeline .tl-range { font-size: 15px; }
+}
+
+@media (pointer: coarse) {
+  /*
+   * Sideways is still the drag, but up and down scrolls the rows: on a phone
+   * the bars cover most of the canvas, and a finger that lands on one must not
+   * be trapped there. A vertical pan cancels the drag, which lets it go.
+   */
+  .timeline .tl-bar { touch-action: pan-y; -webkit-touch-callout: none; }
+  /* Grips a fingertip can find. */
+  .timeline .tl-grip { width: 16px; }
+  .timeline .tl-grip[data-grip="start"] { left: -8px; }
+  .timeline .tl-grip[data-grip="end"] { right: -8px; }
+}

@@ -71,6 +71,13 @@
       "when": 1788459320388,
       "tag": "0009_ban_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790741130976,
+      "tag": "0010_push_subscription",
+      "breakpoints": true
     }
   ]
 }

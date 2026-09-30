@@ -97,7 +97,10 @@ function send(ws: { send: (data: string) => void }, frame: ServerFrame): void {
 // container on one port with no reverse proxy in the way. Registered last, after
 // every API route, because the catch-all would otherwise swallow them.
 if (env.NODE_ENV === "production") {
-  app.use("/assets/*", serveStatic({ root: "./public" }));
+  // Any file the client build shipped — the bundles, and at the root the
+  // service worker, manifest and icons. Served as index.html, the worker would
+  // fail to register and push would never start. Everything else is a route.
+  app.use("*", serveStatic({ root: "./public" }));
   app.get("*", serveStatic({ path: "./public/index.html" }));
 }
 

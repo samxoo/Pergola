@@ -438,9 +438,15 @@ bypasses `commit()`.
 
 Usable. The features listed above are implemented and covered by tests.
 
-Not yet done: email delivery, so notifications are in-app only; scheduled
-automation triggers such as "due tomorrow"; and translations, since strings are
-currently inline rather than extracted.
+Notifications arrive in the app's inbox and, for anyone who turns them on from
+it, as browser push notifications — with Pergola closed, and on phones. Push
+needs the instance served over HTTPS (or `localhost`); on an iPhone or iPad it
+works once Pergola is added to the home screen. Its keys are generated on first
+use and kept in the database, so there is nothing to configure.
+
+Not yet done: email delivery; scheduled automation triggers such as "due
+tomorrow"; and translations, since strings are currently inline rather than
+extracted.
 
 ## Licence
 

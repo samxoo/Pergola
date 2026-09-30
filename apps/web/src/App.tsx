@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Admin } from "./Admin.js";
 import { Banned } from "./Banned.js";
 import { Home, pushRecent, readRecent, type BoardSummary } from "./Home.js";
@@ -23,10 +23,16 @@ import { useT, usePlural, LanguageToggle } from "./lib/i18n.js";
 import { Menu, MenuItem } from "./lib/Menu.js";
 import { Icon } from "./lib/Icon.js";
 import { copyToClipboard } from "./lib/clipboard.js";
+import { COMPACT, FOLDED, useMedia } from "./lib/useMedia.js";
+import { leavePush, registerWorker, syncPush } from "./lib/push.js";
+import { PeopleProvider } from "./lib/people.js";
 
 /** The board named by the address bar, if any. */
 const boardFromUrl = (): string | null =>
   location.pathname.startsWith("/b/") ? location.pathname.slice(3).split("/")[0] || null : null;
+
+/** A card named by the address bar — where a tapped notification lands. */
+const cardFromUrl = (): string | null => new URLSearchParams(location.search).get("card");
 
 type Standing = { banned: boolean; banReason: string | null };
 
@@ -118,7 +124,31 @@ function Workspace({
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-  const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [openCardId, setOpenCardId] = useState<string | null>(cardFromUrl);
+  // Read once, then dropped: a refresh should not keep reopening that card.
+  useEffect(() => {
+    if (cardFromUrl()) history.replaceState(null, "", location.pathname);
+  }, []);
+
+  /*
+   * Push. The worker is registered on every visit, because it is what routes a
+   * tapped notification into this window; and if push is already on here, the
+   * server is told it is for whoever is signed in now.
+   */
+  useEffect(() => {
+    registerWorker();
+    void syncPush();
+    const onWorker = (e: MessageEvent) => {
+      const msg = e.data as { type?: string; url?: string } | null;
+      if (msg?.type !== "pergola:open" || !msg.url) return;
+      const to = new URL(msg.url, location.origin);
+      const id = to.pathname.startsWith("/b/") ? to.pathname.slice(3).split("/")[0] || null : null;
+      openBoard(id);
+      setOpenCardId(to.searchParams.get("card"));
+    };
+    navigator.serviceWorker?.addEventListener("message", onWorker);
+    return () => navigator.serviceWorker?.removeEventListener("message", onWorker);
+  }, [openBoard]);
   const [filter, setFilter] = useState<Filter>(EMPTY);
   const [view, setView] = useState<"board" | "table" | "calendar" | "timeline">("board");
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
@@ -127,6 +157,16 @@ function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  /*
+   * The full top bar is fourteen things wide. Folded — a tablet, a narrow
+   * window — words become icons and the account controls fold into one menu.
+   * Compact — a phone — the board's name also takes the brand's place, and
+   * undo moves down to the view bar.
+   */
+  const folded = useMedia(FOLDED);
+  const compact = useMedia(COMPACT);
+  /** Whoever is signed in, so what they just did is named before any reload. */
+  const me = useMemo(() => ({ id: meId, name: meName, email: "" }), [meId, meName]);
   /** The board being looked at, from the list the picker is built from. */
   const here = boards?.find((b) => b.id === boardId) ?? null;
   const runsTheInstance = meRole === "owner" || meRole === "admin";
@@ -461,27 +501,79 @@ function Workspace({
   };
 
   const openCard = state?.cards.find((c) => c.id === openCardId) ?? null;
-  // A card that someone else archived or deleted should not leave a ghost drawer.
+  /*
+   * A card that someone else archived or deleted should not leave a ghost
+   * drawer. Judged against the board the card is on, not the one being left:
+   * opening a card on another board (from a notification, say) renders once
+   * with the old board still loaded, and that is not the card having gone.
+   */
   useEffect(() => {
-    if (openCardId && state && !openCard) setOpenCardId(null);
-  }, [openCardId, state, openCard]);
+    if (openCardId && state && state.id === boardId && !openCard) setOpenCardId(null);
+  }, [openCardId, state, boardId, openCard]);
+
+  const signOut = async () => {
+    // This device stops getting this person's notifications once they leave.
+    await leavePush();
+    await authClient.signOut();
+    location.reload();
+  };
+
+  /*
+   * Undo and redo are icons, not words. They are used constantly and
+   * recognised instantly, and two labels in the top bar cost more room
+   * than they earn — the tooltip still names them and their shortcut.
+   */
+  const undoGroup = (
+    <div className="undogroup">
+      <button
+        className="btn icon-only"
+        type="button"
+        onClick={undo}
+        disabled={!canUndo}
+        title={t("Undo (⌘Z)")}
+        aria-label={t("Undo")}
+      >
+        <Icon name="undo" />
+      </button>
+      <button
+        className="btn icon-only"
+        type="button"
+        onClick={redo}
+        disabled={!canRedo}
+        title={t("Redo (⇧⌘Z)")}
+        aria-label={t("Redo")}
+      >
+        <Icon name="redo" />
+      </button>
+    </div>
+  );
 
   return (
+    <PeopleProvider state={state} me={me}>
     <div className="app">
       <header className="topbar">
-        <button
-          className="brand"
-          type="button"
-          onClick={() => openBoard(null)}
-          title={t("Go to your boards")}
-        >
-          <Mark />
-          <b>Pergola</b>
-        </button>
+        {/* On a phone the back arrow is the way home, and the name needs the room. */}
+        {!(compact && boardId) && (
+          <button
+            className="brand"
+            type="button"
+            onClick={() => openBoard(null)}
+            title={t("Go to your boards")}
+          >
+            <Mark />
+            <b>Pergola</b>
+          </button>
+        )}
 
         {boardId && (
-          <button className="btn home-btn" type="button" onClick={() => openBoard(null)}>
-            ← {t("Boards")}
+          <button
+            className={`btn home-btn${compact ? " icon-only" : ""}`}
+            type="button"
+            onClick={() => openBoard(null)}
+            title={compact ? t("Go to your boards") : undefined}
+            aria-label={compact ? t("Go to your boards") : undefined}
+          >
+            {compact ? <Icon name="back" /> : <>← {t("Boards")}</>}
           </button>
         )}
 
@@ -501,7 +593,7 @@ function Workspace({
         )}
 
         {/* Who made this board, and when — the question the picker cannot answer. */}
-        {here && (
+        {here && !folded && (
           <span className="board-by muted" title={t("Who created this board")}>
             {here.createdBy
               ? t("by {name}", { name: here.createdBy })
@@ -547,7 +639,7 @@ function Workspace({
 
         <div className="spacer" />
 
-        {state && state.members.length > 0 && (
+        {state && state.members.length > 0 && !folded && (
           <div className="member-strip" title={state.members.map((m) => m.name).join(", ")}>
             {state.members.slice(0, 5).map((m) => (
               <span
@@ -562,51 +654,24 @@ function Workspace({
         )}
 
         <button
-          className="btn"
+          className={`btn${folded ? " icon-only" : ""}`}
           type="button"
           onClick={() => setPaletteOpen(true)}
           title={t("Search and commands")}
+          aria-label={folded ? t("Search") : undefined}
         >
-          {t("Search")} <kbd>⌘K</kbd>
+          {folded ? <Icon name="search" /> : <>{t("Search")} <kbd>⌘K</kbd></>}
         </button>
 
         <Notifications
-          names={new Map((state?.members ?? []).map((m) => [m.id, m.name || m.email]))}
+          compact={folded}
           onOpen={(bId, cId) => {
             if (bId !== boardId) openBoard(bId);
             if (cId) setOpenCardId(cId);
           }}
         />
 
-        {/*
-          * Undo and redo are icons, not words. They are used constantly and
-          * recognised instantly, and two labels in the top bar cost more room
-          * than they earn — the tooltip still names them and their shortcut.
-          */}
-        {boardId && (
-        <div className="undogroup">
-          <button
-            className="btn icon-only"
-            type="button"
-            onClick={undo}
-            disabled={!canUndo}
-            title={t("Undo (⌘Z)")}
-            aria-label={t("Undo")}
-          >
-            <Icon name="undo" />
-          </button>
-          <button
-            className="btn icon-only"
-            type="button"
-            onClick={redo}
-            disabled={!canRedo}
-            title={t("Redo (⇧⌘Z)")}
-            aria-label={t("Redo")}
-          >
-            <Icon name="redo" />
-          </button>
-        </div>
-        )}
+        {boardId && !compact && undoGroup}
 
         {boardId && (
         <div
@@ -629,30 +694,56 @@ function Workspace({
         </div>
         )}
 
-        <LanguageToggle />
-
-        {runsTheInstance && (
-          <button
-            className="btn"
-            type="button"
-            onClick={() => setAdminOpen(true)}
-            title={t("People, invitations and who may join")}
+        {folded ? (
+          <Menu
+            label={
+              <span className="chip avatar" style={{ background: avatarColor(meId) }} aria-hidden="true">
+                {initials(meName)}
+              </span>
+            }
+            title={meName}
+            align="right"
+            triggerClassName="account-btn"
           >
-            {t("Admin")}
-          </button>
-        )}
+            {(close) => (
+              <>
+                <div className="menu-head">{meName}</div>
+                <div className="menu-lang">
+                  <span className="muted">{t("Language")}</span>
+                  <LanguageToggle />
+                </div>
+                <div className="menu-sep" />
+                {runsTheInstance && (
+                  <MenuItem icon={<Icon name="user" />} onClick={() => { setAdminOpen(true); close(); }}>
+                    {t("Admin")}
+                  </MenuItem>
+                )}
+                <MenuItem icon="↪" onClick={() => { close(); void signOut(); }}>
+                  {t("Sign out")}
+                </MenuItem>
+              </>
+            )}
+          </Menu>
+        ) : (
+          <>
+            <LanguageToggle />
 
-        <button
-          className="btn"
-          type="button"
-          title={meName}
-          onClick={async () => {
-            await authClient.signOut();
-            location.reload();
-          }}
-        >
-          {t("Sign out")}
-        </button>
+            {runsTheInstance && (
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setAdminOpen(true)}
+                title={t("People, invitations and who may join")}
+              >
+                {t("Admin")}
+              </button>
+            )}
+
+            <button className="btn" type="button" title={meName} onClick={() => void signOut()}>
+              {t("Sign out")}
+            </button>
+          </>
+        )}
       </header>
 
       {!boards ? (
@@ -705,6 +796,7 @@ function Workspace({
               </label>
             )}
             <span className="spacer" />
+            {compact && undoGroup}
             <button
               className={`btn filter-toggle${filtersOpen ? " on" : ""}`}
               type="button"
@@ -815,5 +907,6 @@ function Workspace({
         </div>
       )}
     </div>
+    </PeopleProvider>
   );
 }
