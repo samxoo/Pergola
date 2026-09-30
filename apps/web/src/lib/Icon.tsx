@@ -18,7 +18,6 @@ export type IconName =
   | "undo"
   | "redo"
   | "boards"
-  | "import"
   | "search"
   | "inbox"
   | "back";
@@ -76,12 +75,6 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <rect x="2.4" y="2.8" width="3.2" height="10.4" rx="0.9" />
       <rect x="6.4" y="2.8" width="3.2" height="7" rx="0.9" />
       <rect x="10.4" y="2.8" width="3.2" height="8.6" rx="0.9" />
-    </>
-  ),
-  import: (
-    <>
-      <path d="M8 2.6v7.4M5.2 7.4 8 10.2l2.8-2.8" />
-      <path d="M2.8 10.8v1.4a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-1.4" />
     </>
   ),
   search: (

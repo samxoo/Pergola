@@ -10,7 +10,7 @@ import { TimelineView } from "./board/TimelineView.js";
 import { CardDrawer } from "./board/CardDrawer.js";
 import { FilterBar } from "./board/FilterBar.js";
 import { Settings } from "./board/Settings.js";
-import { Notifications } from "./lib/Notifications.js";
+import { Notifications, PushNudge } from "./lib/Notifications.js";
 import { Mark } from "./lib/Mark.js";
 import { Palette, type Action, type Hit } from "./lib/Palette.js";
 import { EMPTY, isActive, type Filter } from "./lib/filters.js";
@@ -322,91 +322,6 @@ function Workspace({
     }
   };
 
-  /** Read a Trello export off disk and turn it into a board. */
-  const importTrello = () => {
-    const picker = document.createElement("input");
-    picker.type = "file";
-    picker.accept = "application/json,.json";
-    picker.onchange = async () => {
-      const file = picker.files?.[0];
-      if (!file) return;
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(await file.text());
-      } catch (_err) {
-        void _err;
-        await tell({
-          title: t("That file is not JSON"),
-          description: t(
-            "Export your board from Trello with Menu → More → Print and export → Export as JSON, then pick the file it saves.",
-          ),
-        });
-        return;
-      }
-
-      // One picker, either format: a Pergola export announces itself.
-      const isOurs =
-        typeof parsed === "object" &&
-        parsed !== null &&
-        (parsed as { format?: string }).format === "pergola.board/1";
-
-      const res = isOurs
-        ? await fetch("/api/import/pergola", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ data: parsed }),
-          })
-        : await fetch("/api/import/trello", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(parsed),
-          });
-      if (!res.ok) {
-        await tell({
-          title: t("That import did not work"),
-          description:
-            ((await res.json().catch(() => ({}))) as { message?: string }).message ??
-            t("The file did not look like a Trello board export."),
-        });
-        return;
-      }
-
-      const out = (await res.json()) as {
-        boardId: string;
-        title: string;
-        counts: Record<string, number>;
-        skipped: string[];
-      };
-      const { lists, cards, archived, labels, checklists, comments } = out.counts;
-      void isOurs;
-      await tell({
-        title: t("Imported “{title}”", { title: out.title }),
-        description:
-          t(
-            "{cards} cards across {lists} lists, with {labels} labels, {checklists} checklists and {comments} comments.",
-            {
-              cards: cards ?? 0,
-              lists: lists ?? 0,
-              labels: labels ?? 0,
-              checklists: checklists ?? 0,
-              comments: comments ?? 0,
-            },
-          ) +
-          (archived
-            ? pl(
-                archived,
-                " {count} archived card went straight to the archive.",
-                " {count} archived cards went straight to the archive.",
-              )
-            : "") +
-          (out.skipped.length ? t(" Not carried over: {skipped}.", { skipped: out.skipped.join("; ") }) : ""),
-      });
-      await loadBoards();
-      openBoard(out.boardId);
-    };
-    picker.click();
-  };
-
   const archivedCount = state?.cards.filter((c) => c.archivedAt).length ?? 0;
 
   const paletteActions: Action[] = [
@@ -417,7 +332,6 @@ function Workspace({
     })),
     { id: "home", label: t("Go to your boards"), run: () => openBoard(null) },
     { id: "new-board", label: t("Create a board"), run: () => void createBoard() },
-    { id: "import", label: t("Import a board from Trello"), run: importTrello },
     ...(boardId ? [{ id: "duplicate", label: t("Duplicate this board"), run: () => void duplicateBoard() }] : []),
     ...(boardId ? [{ id: "export", label: t("Export this board as JSON"), run: () => void exportBoard() }] : []),
     ...(boardId ? [{ id: "invite", label: t("Invite someone to this board"), run: () => void invite() }] : []),
@@ -608,9 +522,6 @@ function Workspace({
               <MenuItem icon="＋" onClick={() => { void createBoard(); close(); }}>
                 {t("New board")}
               </MenuItem>
-              <MenuItem icon="↧" onClick={() => { importTrello(); close(); }}>
-                {t("Import a board from Trello")}
-              </MenuItem>
               {boardId && <div className="menu-sep" />}
               {boardId && (
                 <MenuItem icon="⧉" onClick={() => { void duplicateBoard(); close(); }}>
@@ -746,6 +657,8 @@ function Workspace({
         )}
       </header>
 
+      <PushNudge />
+
       {!boards ? (
         <div className="loading">{t("Loading…")}</div>
       ) : boardId === null ? (
@@ -755,7 +668,6 @@ function Workspace({
           runsTheInstance={runsTheInstance}
           onOpen={openBoard}
           onCreate={() => void createBoard()}
-          onImport={importTrello}
           onAdmin={() => setAdminOpen(true)}
         />
       ) : state ? (

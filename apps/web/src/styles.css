@@ -35,6 +35,13 @@
   --r: 5px;
   --gap: 12px;
 
+  /*
+   * Tells the browser which theme its own controls are drawn for. Without it a
+   * <select> kept the light theme's black text on the dark theme's dark fill,
+   * which is how the board picker went invisible on a phone in dark mode.
+   */
+  color-scheme: light;
+
   /* Springs, not easing curves — a card should have mass. */
   --spring: linear(
     0, 0.402 7.4%, 0.716 15.3%, 0.938 23.7%, 1.017 28.2%, 1.067 33%,
@@ -61,6 +68,7 @@
     --app-bg: linear-gradient(165deg, #12161f 0%, #0e121a 60%, #0a0d14 100%);
     --float: 0 1px 3px rgb(0 0 0 / 45%), 0 16px 36px -22px rgb(0 0 0 / 72%);
     --lift-2: 0 2px 5px rgb(0 0 0 / 50%), 0 16px 32px -16px rgb(0 0 0 / 78%);
+    color-scheme: dark;
   }
 }
 
@@ -79,7 +87,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button { font: inherit; color: inherit; }
+button, select { font: inherit; color: inherit; }
 
 .mono, .num {
   font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, "Noto Sans Georgian", monospace;
@@ -1302,6 +1310,24 @@ kbd {
 .push-row.off > span:first-child { flex: 1 1 200px; }
 .push-row .btn { padding: 4px 11px; font-size: 12.5px; }
 .push-problem { flex: 1 1 100%; color: var(--rust); font-size: 12px; }
+
+/* The one-time ask under the top bar. */
+.push-nudge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--beam-wash);
+  font-size: 13px;
+  flex: none;
+}
+.push-nudge-text { flex: 1 1 260px; }
+.push-nudge .btn { padding: 4px 12px; }
+@media (max-width: 720px) {
+  .push-nudge { padding: 8px 10px; }
+}
 
 .bell-row {
   display: flex;

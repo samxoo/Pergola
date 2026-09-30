@@ -249,8 +249,16 @@ deactivate themselves, and the instance always keeps at least one active owner.
 
 ## Migrating from Trello
 
-In Trello, choose *Menu → More → Print and export → Export as JSON*. Then use
-**Import** in the Pergola toolbar.
+The app has no import button; the importer is in the API. In Trello, choose
+*Menu → More → Print and export → Export as JSON*, then post the file as a
+signed-in user or with a token:
+
+```sh
+curl -X POST https://your-pergola/api/import/trello \
+  -H "Authorization: Bearer $PERGOLA_TOKEN" \
+  -H "content-type: application/json" \
+  --data @trello-board.json
+```
 
 Lists, cards, their order, labels, due dates, descriptions, checklists and
 comments all transfer. Cards Trello had archived arrive in the archive rather
@@ -266,8 +274,9 @@ importer reports everything it could not carry when it finishes.
 
 **Export** on any board downloads a `.pergola.json` file containing lists, cards
 and their order, labels, custom fields, checklists, attachments and comments.
-**Import** reads it back, into this instance or any other. A test asserts that a
-round trip returns the same board in the same order.
+`POST /api/import/pergola` with `{ "data": <that file> }` reads it back, into
+this instance or any other. A test asserts that a round trip returns the same
+board in the same order.
 
 Assignees are deliberately not carried across, since accounts belong to an
 instance and inventing a mapping would attribute work to the wrong person.

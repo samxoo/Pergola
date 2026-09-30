@@ -73,7 +73,6 @@ type Props = {
   runsTheInstance: boolean;
   onOpen: (id: string) => void;
   onCreate: () => void;
-  onImport: () => void;
   onAdmin: () => void;
 };
 
@@ -85,7 +84,7 @@ type Props = {
  * instance, everything else on it — kept apart, so an admin can tell the
  * boards they work on from the ones they merely oversee.
  */
-export function Home({ boards, recentIds, runsTheInstance, onOpen, onCreate, onImport, onAdmin }: Props) {
+export function Home({ boards, recentIds, runsTheInstance, onOpen, onCreate, onAdmin }: Props) {
   const t = useT();
   const byId = new Map(boards.map((b) => [b.id, b]));
   const mine = boards.filter((b) => b.member);
@@ -105,10 +104,6 @@ export function Home({ boards, recentIds, runsTheInstance, onOpen, onCreate, onI
         <button className="side-item" type="button" onClick={onCreate}>
           <Icon name="plus" />
           {t("Create new board")}
-        </button>
-        <button className="side-item" type="button" onClick={onImport}>
-          <Icon name="import" />
-          {t("Import from Trello")}
         </button>
         {runsTheInstance && (
           <button className="side-item" type="button" onClick={onAdmin}>
@@ -146,9 +141,6 @@ export function Home({ boards, recentIds, runsTheInstance, onOpen, onCreate, onI
             <div className="home-empty-actions">
               <button className="btn primary" type="button" onClick={onCreate}>
                 {t("Create the first board")}
-              </button>
-              <button className="btn" type="button" onClick={onImport}>
-                {t("Import from Trello")}
               </button>
             </div>
           </div>

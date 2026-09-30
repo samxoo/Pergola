@@ -173,6 +173,8 @@ function PushSwitch() {
           onClick={() =>
             void run(async () => {
               await disablePush();
+              // Turned off on purpose: the bar should not come back to ask.
+              dismissNudge();
               return "off";
             })
           }
@@ -186,8 +188,91 @@ function PushSwitch() {
   return (
     <div className="push-row off">
       <span>{t("Get a notification when you are mentioned or a card is added, even with Pergola closed.")}</span>
-      <button className="btn primary" type="button" disabled={busy} onClick={() => void run(enablePush)}>
+      <button
+        className="btn primary"
+        type="button"
+        disabled={busy}
+        onClick={() => void run(() => enablePush(confirmation(t)))}
+      >
         {busy ? t("Working…") : t("Turn on")}
+      </button>
+      {problem && <span className="push-problem">{problem}</span>}
+    </div>
+  );
+}
+
+/** What the test notification says, in the language the page is in. */
+const confirmation = (t: (k: string) => string) => ({
+  title: "Pergola",
+  body: t("Notifications are on for this device."),
+});
+
+const NUDGE_KEY = "pergola.push.nudge";
+
+const dismissNudge = () => {
+  try {
+    localStorage.setItem(NUDGE_KEY, "dismissed");
+  } catch {
+    // Blocked storage: the bar comes back next visit, which is survivable.
+  }
+};
+
+/**
+ * The ask, where it cannot be missed.
+ *
+ * A browser only shows its permission prompt after a click, and one that
+ * prompts on arrival gets its prompts hidden — so the page asks first, in a
+ * bar under the top bar, and the browser asks when someone says yes. Once per
+ * browser: it goes for good when push is on, blocked, or waved away.
+ */
+export function PushNudge() {
+  const t = useT();
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  useEffect(() => {
+    let dismissed = false;
+    try {
+      dismissed = localStorage.getItem(NUDGE_KEY) === "dismissed";
+    } catch {
+      // Unreadable storage reads as never dismissed.
+    }
+    if (!dismissed) void pushState().then((s) => setShow(s === "off"));
+  }, []);
+
+  if (!show) return null;
+
+  const turnOn = async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      // Dismissing the browser's prompt leaves it "off": the bar stays to ask again.
+      if ((await enablePush(confirmation(t))) !== "off") setShow(false);
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : t("Please try again."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="push-nudge" role="region" aria-label={t("Notifications")}>
+      <span className="push-nudge-text">
+        {t("Get a notification when you are mentioned or a card is added, even with Pergola closed.")}
+      </span>
+      <button className="btn primary" type="button" disabled={busy} onClick={() => void turnOn()}>
+        {busy ? t("Working…") : t("Turn on")}
+      </button>
+      <button
+        className="linkish"
+        type="button"
+        onClick={() => {
+          dismissNudge();
+          setShow(false);
+        }}
+      >
+        {t("Not now")}
       </button>
       {problem && <span className="push-problem">{problem}</span>}
     </div>

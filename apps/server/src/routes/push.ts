@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { actorOf, requireUser, type Env } from "../auth/guard.js";
 import { BlockedAddress, resolvePublic } from "../automation/ssrf.js";
-import { vapidKeys } from "../automation/webpush.js";
+import { pushToDevice, vapidKeys } from "../automation/webpush.js";
 import { db } from "../db/index.js";
 import { pushSubscription } from "../db/schema.js";
 
@@ -52,6 +52,28 @@ export const push = new Hono<Env>()
           set: { userId, p256dh: keys.p256dh, auth: keys.auth },
         });
       return c.body(null, 204);
+    },
+  )
+
+  /*
+   * A notification to this device only, right after it is turned on: proof the
+   * whole path works — keys, the browser's push service, the worker — rather
+   * than a switch that says "on" and a first real notification that never
+   * comes. The words are the browser's, so they arrive in its language; they
+   * can only ever reach the sender's own device.
+   */
+  .post(
+    "/push/test",
+    zValidator(
+      "json",
+      z.object({ endpoint: Endpoint, title: z.string().max(120), body: z.string().max(300) }),
+    ),
+    async (c) => {
+      const { endpoint, title, body } = c.req.valid("json");
+      const sent = await pushToDevice(actorOf(c).id, endpoint, { title, body, url: "/", tag: "pergola:test" });
+      return sent
+        ? c.body(null, 204)
+        : c.json({ message: "The browser's push service did not take the test notification" }, 502);
     },
   )
 

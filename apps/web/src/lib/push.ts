@@ -62,8 +62,14 @@ async function serverKey(): Promise<Uint8Array<ArrayBuffer>> {
 const sameKey = (a: ArrayBuffer | null, b: Uint8Array) =>
   a !== null && a.byteLength === b.byteLength && new Uint8Array(a).every((x, i) => x === b[i]);
 
-/** Ask, subscribe, and hand the address to the server. Call from a tap. */
-export async function enablePush(): Promise<PushState> {
+/**
+ * Ask, subscribe, and hand the address to the server. Call from a tap.
+ *
+ * Then the server sends `confirmation` to this device, so the person sees push
+ * work end to end. If that fails the subscription stays — pressing again
+ * retries — but the error says so rather than leaving a switch that lies.
+ */
+export async function enablePush(confirmation: { title: string; body: string }): Promise<PushState> {
   if (!supported()) return "unsupported";
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return permission === "denied" ? "denied" : "off";
@@ -86,6 +92,16 @@ export async function enablePush(): Promise<PushState> {
     await sub.unsubscribe();
     const body = (await res.json().catch(() => ({}))) as { message?: string };
     throw new Error(body.message ?? "The server did not accept this browser for notifications");
+  }
+
+  const test = await fetch("/api/push/test", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ endpoint: sub.endpoint, ...confirmation }),
+  });
+  if (!test.ok) {
+    const body = (await test.json().catch(() => ({}))) as { message?: string };
+    throw new Error(body.message ?? "The test notification did not go out");
   }
   return "on";
 }

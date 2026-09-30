@@ -193,20 +193,8 @@ const ka: Record<string, string> = {
   "{url}\n\nCopy it now — it is not shown again. Nothing is emailed, so send it to {email} however you already talk to them. It works once, for that address only.":
     "{url}\n\nდააკოპირეთ ახლავე — ხელახლა აღარ გამოჩნდება. არაფერი იგზავნება ელფოსტით, ამიტომ გაუგზავნეთ {email}-ს ისე, როგორც ჩვეულებრივ ურთიერთობთ. მუშაობს ერთხელ, მხოლოდ ამ მისამართისთვის.",
   "That invite did not go through": "მოწვევა ვერ გაიგზავნა",
-  "That file is not JSON": "ეს ფაილი არ არის JSON",
-  "Export your board from Trello with Menu → More → Print and export → Export as JSON, then pick the file it saves.":
-    "დააექსპორტეთ დაფა Trello-დან: Menu → More → Print and export → Export as JSON, შემდეგ აირჩიეთ შენახული ფაილი.",
-  "That import did not work": "იმპორტი ვერ მოხერხდა",
-  "The file did not look like a Trello board export.": "ფაილი არ ჰგავდა Trello დაფის ექსპორტს.",
-  "Imported “{title}”": "იმპორტირებულია „{title}“",
-  "{cards} cards across {lists} lists, with {labels} labels, {checklists} checklists and {comments} comments.":
-    "{cards} ბარათი {lists} სიაში, {labels} იარლიყით, {checklists} ჩეკლისტითა და {comments} კომენტარით.",
-  " {count} archived card went straight to the archive.": " {count} დაარქივებული ბარათი პირდაპირ არქივში გადავიდა.",
-  " {count} archived cards went straight to the archive.": " {count} დაარქივებული ბარათი პირდაპირ არქივში გადავიდა.",
-  " Not carried over: {skipped}.": " არ გადმოვიდა: {skipped}.",
   "Open board: {title}": "დაფის გახსნა: {title}",
   "Create a board": "დაფის შექმნა",
-  "Import a board from Trello": "დაფის იმპორტი Trello-დან",
   "Duplicate this board": "ამ დაფის დუბლირება",
   "Export this board as JSON": "ამ დაფის ექსპორტი JSON-ად",
   "Invite someone to this board": "მოიწვიე ვინმე ამ დაფაზე",
@@ -225,8 +213,6 @@ const ka: Record<string, string> = {
   "Copy the cards too": "ბარათებიც დააკოპირე",
   "Duplicate": "დუბლირება",
   "That copy did not work": "კოპირება ვერ მოხერხდა",
-  "Import": "იმპორტი",
-  "Import a Trello JSON export": "Trello JSON ექსპორტის იმპორტი",
   "Copy this board, with or without its cards": "დააკოპირე ეს დაფა, ბარათებით ან მათ გარეშე",
   "Export": "ექსპორტი",
   "Download this board as JSON": "ჩამოტვირთე დაფა JSON-ად",
@@ -569,6 +555,7 @@ const ka: Record<string, string> = {
     "მიიღეთ შეტყობინება, როცა მოგნიშნავენ ან ბარათი დაემატება — Pergola-ს დახურვის შემთხვევაშიც.",
   "Turn on": "ჩართვა",
   "Turn off": "გამორთვა",
+  "Not now": "ახლა არა",
   "Notifications are on for this device.": "ამ მოწყობილობაზე შეტყობინებები ჩართულია.",
   "Notifications are blocked for this site. Allow them in your browser's site settings to hear about mentions and new cards.":
     "ამ საიტისთვის შეტყობინებები დაბლოკილია. დაუშვით ისინი ბრაუზერის საიტის პარამეტრებში, რომ გაიგოთ მონიშვნებისა და ახალი ბარათების შესახებ.",
@@ -678,7 +665,6 @@ const ka: Record<string, string> = {
   "You are not a member of these. As an owner or admin you can still open and run them.":
     "ამ დაფების წევრი არ ხართ. როგორც მფლობელს ან ადმინს, მაინც შეგიძლიათ მათი გახსნა და მართვა.",
   "Create new board": "ახალი დაფის შექმნა",
-  "Import from Trello": "Trello-დან იმპორტი",
   "People and access": "ხალხი და წვდომა",
   "Admin access": "ადმინის წვდომა",
   "Open board {title}": "დაფის გახსნა: {title}",

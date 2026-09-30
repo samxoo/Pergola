@@ -80,11 +80,40 @@ export async function pushTo(userIds: string[], compose: () => Promise<PushMessa
     .innerJoin(user, eq(user.id, pushSubscription.userId))
     .where(and(inArray(pushSubscription.userId, userIds), isNull(user.deactivatedAt)));
   if (subs.length === 0) return;
+  await deliver(subs, compose);
+}
 
+/**
+ * One message to one device of one person — the test that turning push on
+ * sends, so they see it work end to end rather than take it on trust.
+ * True when the push service accepted it.
+ */
+export async function pushToDevice(
+  userId: string,
+  endpoint: string,
+  message: PushMessage,
+): Promise<boolean> {
+  const subs = await db
+    .select({
+      id: pushSubscription.id,
+      endpoint: pushSubscription.endpoint,
+      p256dh: pushSubscription.p256dh,
+      auth: pushSubscription.auth,
+    })
+    .from(pushSubscription)
+    .where(and(eq(pushSubscription.userId, userId), eq(pushSubscription.endpoint, endpoint)));
+  return (await deliver(subs, async () => message)) > 0;
+}
+
+type Sub = { id: string; endpoint: string; p256dh: string; auth: string };
+
+/** Send to each subscription; returns how many the push services accepted. */
+async function deliver(subs: Sub[], compose: () => Promise<PushMessage>): Promise<number> {
+  if (subs.length === 0) return 0;
   const { publicKey, privateKey } = await vapidKeys();
   const payload = JSON.stringify(await compose());
 
-  await Promise.all(
+  const sent = await Promise.all(
     subs.map(async (s) => {
       try {
         // Checked again on the way out, as a webhook is: DNS is not a promise.
@@ -99,6 +128,7 @@ export async function pushTo(userIds: string[], compose: () => Promise<PushMessa
             timeout: 10_000,
           },
         );
+        return true;
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode;
         // Gone: the browser unsubscribed, or the person cleared its data. Or
@@ -108,7 +138,9 @@ export async function pushTo(userIds: string[], compose: () => Promise<PushMessa
         } else {
           console.error("[push] delivery failed:", status ?? err);
         }
+        return false;
       }
     }),
   );
+  return sent.filter(Boolean).length;
 }
