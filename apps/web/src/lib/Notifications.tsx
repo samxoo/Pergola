@@ -224,10 +224,14 @@ const dismissNudge = () => {
  * prompts on arrival gets its prompts hidden — so the page asks first, in a
  * bar under the top bar, and the browser asks when someone says yes. Once per
  * browser: it goes for good when push is on, blocked, or waved away.
+ *
+ * Safari on an iPhone has no push and never offers to install, so there the
+ * bar says how to add Pergola to the home screen instead. The home screen app
+ * keeps its own storage, so waving this away does not stop it asking there.
  */
 export function PushNudge() {
   const t = useT();
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState<"ask" | "install" | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -238,17 +242,45 @@ export function PushNudge() {
     } catch {
       // Unreadable storage reads as never dismissed.
     }
-    if (!dismissed) void pushState().then((s) => setShow(s === "off"));
+    if (dismissed) return;
+    void pushState().then((s) => {
+      if (s === "off") setShow("ask");
+      else if (s === "unsupported" && isIosBrowser()) setShow("install");
+    });
   }, []);
 
   if (!show) return null;
+
+  const notNow = (
+    <button
+      className="linkish"
+      type="button"
+      onClick={() => {
+        dismissNudge();
+        setShow(null);
+      }}
+    >
+      {t("Not now")}
+    </button>
+  );
+
+  if (show === "install") {
+    return (
+      <div className="push-nudge" role="region" aria-label={t("Notifications")}>
+        <span className="push-nudge-text">
+          {t("To get notifications on an iPhone or iPad, tap Share → Add to Home Screen, then open Pergola from there.")}
+        </span>
+        {notNow}
+      </div>
+    );
+  }
 
   const turnOn = async () => {
     setBusy(true);
     setProblem(null);
     try {
       // Dismissing the browser's prompt leaves it "off": the bar stays to ask again.
-      if ((await enablePush(confirmation(t))) !== "off") setShow(false);
+      if ((await enablePush(confirmation(t))) !== "off") setShow(null);
     } catch (err) {
       setProblem(err instanceof Error ? err.message : t("Please try again."));
     } finally {
@@ -264,16 +296,7 @@ export function PushNudge() {
       <button className="btn primary" type="button" disabled={busy} onClick={() => void turnOn()}>
         {busy ? t("Working…") : t("Turn on")}
       </button>
-      <button
-        className="linkish"
-        type="button"
-        onClick={() => {
-          dismissNudge();
-          setShow(false);
-        }}
-      >
-        {t("Not now")}
-      </button>
+      {notNow}
       {problem && <span className="push-problem">{problem}</span>}
     </div>
   );

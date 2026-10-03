@@ -17,9 +17,13 @@ export type PushState =
 const supported = () =>
   "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 
-/** iOS allows push only to a web app opened from the home screen. */
+/**
+ * iOS allows push only to a web app opened from the home screen. An iPad's
+ * Safari says it is a Mac, so it is told apart by its touch screen.
+ */
 export const isIosBrowser = () =>
-  /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) &&
   !(navigator as { standalone?: boolean }).standalone;
 
 /**
