@@ -4,12 +4,16 @@ import { useT } from "./i18n.js";
 export type Field = {
   name: string;
   label: string;
-  type?: "text" | "number" | "email" | "select" | "textarea";
+  type?: "text" | "number" | "email" | "password" | "select" | "textarea";
   placeholder?: string;
   defaultValue?: string;
   options?: { value: string; label: string }[];
   hint?: string;
   required?: boolean;
+  /** Keeps the confirm button off until there is this much — say so in `hint`. */
+  minLength?: number;
+  /** What a password manager should make of it — "new-password", "off", … */
+  autoComplete?: string;
 };
 
 type AskOptions = {
@@ -165,7 +169,11 @@ function DialogHost({
       ? t("Close")
       : (pending.opts.confirmLabel ?? (pending.kind === "confirm" ? t("Confirm") : t("Save")));
 
-  const missing = fields.some((f) => f.required !== false && !values[f.name]?.trim());
+  const missing = fields.some(
+    (f) =>
+      (f.required !== false && !values[f.name]?.trim()) ||
+      (f.minLength !== undefined && (values[f.name] ?? "").length < f.minLength),
+  );
 
   return (
     <>
@@ -211,6 +219,7 @@ function DialogHost({
                 type={f.type ?? "text"}
                 value={values[f.name] ?? ""}
                 placeholder={f.placeholder}
+                autoComplete={f.autoComplete}
                 onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
               />
             )}

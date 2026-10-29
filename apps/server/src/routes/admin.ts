@@ -1,10 +1,10 @@
 import { zValidator } from "@hono/zod-validator";
-import { asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { auth } from "../auth.js";
 import { db } from "../db/index.js";
-import { board, invite, user } from "../db/schema.js";
+import { account, board, invite, session, user } from "../db/schema.js";
 import {
   ban,
   findInvite,
@@ -237,6 +237,117 @@ export const admin = new Hono<Env>()
       if (role) await db.update(user).set({ role }).where(eq(user.id, targetId));
       if (active === false) await ban(targetId, reason!);
       if (active === true) await liftBan(targetId);
+
+      return c.json({ ok: true });
+    },
+  )
+
+  /**
+   * Make an account outright, password and all.
+   *
+   * The invite link is the careful way in; this is the quick one, for an admin
+   * who is going to hand the password over themselves anyway. Nothing is sent
+   * and nothing waits to be confirmed — they can sign in the moment this returns.
+   */
+  .post(
+    "/admin/people",
+    zValidator("json", z.object({
+      name: z.string().trim().min(1).max(120),
+      email: z.email().max(200),
+      password: z.string().min(10).max(200),
+      role: z.enum(["owner", "admin", "member"]).default("member"),
+    })),
+    async (c) => {
+      const myRole = await requireInstanceAdmin(actorOf(c).id);
+      const { name, password, role } = c.req.valid("json");
+      const email = c.req.valid("json").email.toLowerCase();
+
+      // The same rule as inviting: an admin must not mint an owner.
+      if (role === "owner" && myRole !== "owner") {
+        return c.json({ message: "Only an owner can make someone an owner" }, 403);
+      }
+
+      const [existing] = await db
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.email, email))
+        .limit(1);
+      if (existing) return c.json({ message: "That person already has an account" }, 409);
+
+      // Straight to Better Auth, like accepting an invite: the sign-up gate in
+      // app.ts keeps strangers out, and whoever gets here is an admin.
+      const created = await auth.api.signUpEmail({
+        body: { email, password, name },
+        asResponse: true,
+      });
+      if (!created.ok) return c.json({ message: "That account could not be created" }, 400);
+
+      const id = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(user)
+          .set({ role })
+          .where(eq(user.email, email))
+          .returning({ id: user.id });
+        // Signing up signs in, and that session belongs to nobody — its cookie
+        // was never handed out. Left alone, they read as "seen moments ago".
+        await tx.delete(session).where(eq(session.userId, row!.id));
+        // An invite still waiting for this address is now a link to an error.
+        await tx
+          .update(invite)
+          .set({ acceptedAt: new Date() })
+          .where(and(eq(invite.email, email), isNull(invite.acceptedAt)));
+        return row!.id;
+      });
+
+      return c.json({ id }, 201);
+    },
+  )
+
+  /**
+   * Give someone a new password.
+   *
+   * For whoever forgot theirs, or whose account someone else has been in. Either
+   * way the old sessions should not outlive the old password, so every device
+   * they are signed in on is signed out.
+   */
+  .put(
+    "/admin/people/:id/password",
+    zValidator("json", z.object({ password: z.string().min(10).max(200) })),
+    async (c) => {
+      const me = actorOf(c);
+      const myRole = await requireInstanceAdmin(me.id);
+      const targetId = c.req.param("id");
+
+      // Your own goes through Better Auth's change-password, which asks for the
+      // current one: a session left open on a shared machine should not be
+      // enough to lock its owner out.
+      if (targetId === me.id) {
+        return c.json({ message: "Change your own password from your account menu" }, 409);
+      }
+
+      const [target] = await db
+        .select({ role: user.role })
+        .from(user)
+        .where(eq(user.id, targetId))
+        .limit(1);
+      if (!target) return c.json({ message: "No such person" }, 404);
+      // Otherwise an admin takes an owner's account, and with it the instance.
+      if (target.role === "owner" && myRole !== "owner") {
+        return c.json({ message: "Only an owner can change another owner's password" }, 403);
+      }
+
+      // Hashed by Better Auth, so it is the hash its sign-in will check against.
+      const hash = await (await auth.$context).password.hash(c.req.valid("json").password);
+      const changed = await db.transaction(async (tx) => {
+        const rows = await tx
+          .update(account)
+          .set({ password: hash })
+          .where(and(eq(account.userId, targetId), eq(account.providerId, "credential")))
+          .returning({ id: account.id });
+        if (rows.length > 0) await tx.delete(session).where(eq(session.userId, targetId));
+        return rows.length > 0;
+      });
+      if (!changed) return c.json({ message: "That account has no password to change" }, 409);
 
       return c.json({ ok: true });
     },

@@ -289,6 +289,32 @@ const ka: Record<string, string> = {
   "They get everything back: their boards, their uploads, and a way in.":
     "ყველაფერი უბრუნდებათ: დაფები, ატვირთვები და შესვლის გზა.",
   "{name}'s ban was not lifted": "{name}-ის ბლოკი არ მოიხსნა",
+  "Add someone": "ვინმეს დამატება",
+  "They can sign in straight away with this email and password — no link, nothing to confirm. They can change the password later from their account menu.":
+    "შესვლა მაშინვე შეეძლებათ ამ ელფოსტითა და პაროლით — ბმულისა და დადასტურების გარეშე. პაროლს მოგვიანებით თავად შეცვლიან ანგარიშის მენიუდან.",
+  "That account was not created": "ანგარიში ვერ შეიქმნა",
+  "Sign-in details copied": "შესვლის მონაცემები დაკოპირდა",
+  "Copy these sign-in details now": "დააკოპირეთ შესვლის მონაცემები ახლა",
+  "{details}\n\nSend them to {name} however you already talk to them — nothing is emailed, and the password is not shown again.":
+    "{details}\n\nგაუგზავნეთ {name}-ს ისე, როგორც ჩვეულებრივ ესაუბრებით — ელფოსტით არაფერი იგზავნება და პაროლი აღარ გამოჩნდება.",
+  "New password for {name}": "ახალი პაროლი — {name}",
+  "They are signed out on every device and sign in again with this one. Nothing is emailed — tell them yourself.":
+    "ყველა მოწყობილობაზე გამოვლენ სისტემიდან და ხელახლა ამ პაროლით შევლენ. ელფოსტით არაფერი იგზავნება — თავად უთხარით.",
+  "New password": "ახალი პაროლი",
+  "Set password": "პაროლის დაყენება",
+  "{name}'s password was not changed": "{name}-ის პაროლი არ შეიცვალა",
+  "{name}'s password is changed": "{name}-ის პაროლი შეიცვალა",
+  "They were signed out everywhere, and sign in again with the new one.":
+    "ყველგან გამოვიდნენ სისტემიდან და ხელახლა ახალი პაროლით შევლენ.",
+  "Change your password": "შეცვალეთ თქვენი პაროლი",
+  "Every other device you are signed in on is signed out. This one stays in.":
+    "ყველა სხვა მოწყობილობაზე გამოხვალთ სისტემიდან. ამაზე დარჩებით.",
+  "Current password": "მიმდინარე პაროლი",
+  "Change password": "პაროლის შეცვლა",
+  "Your password was not changed": "თქვენი პაროლი არ შეიცვალა",
+  "The current password is not right.": "მიმდინარე პაროლი არასწორია.",
+  "Password changed": "პაროლი შეიცვალა",
+  "Use the new one the next time you sign in.": "შემდეგ შესვლისას გამოიყენეთ ახალი.",
   "Your account is banned": "თქვენი ანგარიში დაბლოკილია",
   "An owner or admin of this instance banned your account. This notice stays until they lift it; nothing you made has been deleted.":
     "ამ ინსტანციის მფლობელმა ან ადმინმა დაბლოკა თქვენი ანგარიში. ეს შეტყობინება დარჩება, სანამ ბლოკს არ მოხსნიან; თქვენ მიერ შექმნილი არაფერი წაშლილა.",

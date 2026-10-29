@@ -20,7 +20,8 @@ export type IconName =
   | "boards"
   | "search"
   | "inbox"
-  | "back";
+  | "back"
+  | "key";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   tag: (
@@ -90,6 +91,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   back: <path d="M9.8 3.4 5.2 8l4.6 4.6" />,
+  key: (
+    <>
+      <circle cx="5.4" cy="10.6" r="2.8" />
+      <path d="m7.4 8.6 5.6-5.6M11.2 4.8l1.6 1.6M9.6 6.4l1.4 1.4" />
+    </>
+  ),
 };
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {

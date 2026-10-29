@@ -1400,6 +1400,80 @@ async function main() {
   });
   check(selfDemote.status === 409, "an owner cannot lock themselves out by demotion");
 
+  /* ------------------------------------------------- accounts, by hand -- */
+  const signInAs = (email: string, password: string) =>
+    fetch(`${BASE}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: BASE },
+      body: JSON.stringify({ email, password }),
+    });
+  const asAdmin = (path: string, method: string, body: unknown, cookie = adminCookie) =>
+    fetch(BASE + path, {
+      method,
+      headers: { "content-type": "application/json", origin: BASE, cookie },
+      body: JSON.stringify(body),
+    });
+
+  const handMade = `handmade+${Date.now()}@example.com`;
+  const memberMakes = await asAdmin(
+    "/api/admin/people",
+    "POST",
+    { name: "Nope", email: `nope+${Date.now()}@example.com`, password: "long-enough-password" },
+    sam.cookie(),
+  );
+  check(memberMakes.status === 403, "a member cannot create accounts");
+
+  const handMadeRes = await asAdmin("/api/admin/people", "POST", {
+    name: "Hand Made",
+    email: handMade,
+    password: "first-password-1",
+  });
+  check(handMadeRes.status === 201, "an admin can create an account outright, with a password");
+  const madeId = ((await handMadeRes.json()) as { id: string }).id;
+  const firstIn = await signInAs(handMade, "first-password-1");
+  check(firstIn.ok, "and that person can sign in with it at once — no link, nothing to confirm");
+  const madeRow = (
+    (await (
+      await fetch(`${BASE}/api/admin/people`, { headers: { cookie: adminCookie } })
+    ).json()) as { id: string; role: string }[]
+  ).find((p) => p.id === madeId);
+  check(madeRow?.role === "member", "as a member, unless the admin said otherwise");
+
+  const again = await asAdmin("/api/admin/people", "POST", {
+    name: "Twice",
+    email: handMade,
+    password: "first-password-1",
+  });
+  check(again.status === 409, "and the same address cannot be made twice");
+
+  const madeCookie = firstIn.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
+  const reset = await asAdmin(`/api/admin/people/${madeId}/password`, "PUT", {
+    password: "second-password-2",
+  });
+  check(reset.status === 200, "an admin can give someone a new password");
+  check(!(await signInAs(handMade, "first-password-1")).ok, "after which the old one is refused");
+  check((await signInAs(handMade, "second-password-2")).ok, "and the new one works");
+  const oldSession = await fetch(`${BASE}/api/boards`, { headers: { cookie: madeCookie } });
+  check(oldSession.status === 401, "and a session from before the change is signed out");
+
+  const shortOne = await asAdmin(`/api/admin/people/${madeId}/password`, "PUT", {
+    password: "short",
+  });
+  check(shortOne.status === 400, "a password under ten characters is refused");
+
+  const memberResets = await asAdmin(
+    `/api/admin/people/${madeId}/password`,
+    "PUT",
+    { password: "member-picked-this" },
+    sam.cookie(),
+  );
+  check(memberResets.status === 403, "a member cannot set anyone's password");
+
+  const selfReset = await asAdmin(`/api/admin/people/${meRow.id}/password`, "PUT", {
+    password: "no-current-password",
+  });
+  check(selfReset.status === 409, "and an admin's own goes through change-password, not this");
+
   /* --------------------------------------------------- replay, reconnect */
   section("Replay and reconnect");
   const replayId = randomUUID();

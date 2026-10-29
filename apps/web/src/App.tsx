@@ -26,6 +26,7 @@ import { copyToClipboard } from "./lib/clipboard.js";
 import { COMPACT, FOLDED, useMedia } from "./lib/useMedia.js";
 import { leavePush, registerWorker, syncPush } from "./lib/push.js";
 import { PeopleProvider } from "./lib/people.js";
+import { useChangePassword } from "./lib/password.js";
 
 /** The board named by the address bar, if any. */
 const boardFromUrl = (): string | null =>
@@ -171,6 +172,7 @@ function Workspace({
   const here = boards?.find((b) => b.id === boardId) ?? null;
   const runsTheInstance = meRole === "owner" || meRole === "admin";
   const { ask, confirm, tell } = useDialogs();
+  const changePassword = useChangePassword();
   const { state, live, pending, error, apply, undo, redo, canUndo, canRedo, ingest, dismissError } =
     useBoard(boardId, meId);
 
@@ -342,6 +344,7 @@ function Workspace({
     ...(runsTheInstance
       ? [{ id: "admin", label: t("Manage people and access"), run: () => setAdminOpen(true) }]
       : []),
+    { id: "password", label: t("Change your password"), run: () => void changePassword() },
     { id: "undo", label: t("Undo the last change"), hint: "⌘Z", run: undo },
   ];
 
@@ -629,6 +632,9 @@ function Workspace({
                     {t("Admin")}
                   </MenuItem>
                 )}
+                <MenuItem icon={<Icon name="key" />} onClick={() => { close(); void changePassword(); }}>
+                  {t("Change password")}
+                </MenuItem>
                 <MenuItem icon="↪" onClick={() => { close(); void signOut(); }}>
                   {t("Sign out")}
                 </MenuItem>

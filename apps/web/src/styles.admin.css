@@ -30,6 +30,7 @@
 .admin .invite .badge { text-transform: capitalize; }
 
 .admin .tally { font-size: 11.5px; }
+.admin .head-tools { display: flex; align-items: center; gap: 12px; }
 
 /* ---- switched off -------------------------------------------------------- */
 

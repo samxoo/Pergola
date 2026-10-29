@@ -103,12 +103,13 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
 
       <div className="card-meta">
         {/*
-          * Who put the card here and when, to the minute — the question a list
-          * of cards actually gets asked. The PRG number is a reference, and it
-          * stays in the card itself, the table and search; on the face it is
-          * shown only for a card old enough to have no record of its making.
+          * The PRG number first: it is what people say out loud and paste into
+          * chat, and finding PRG-30 should not mean opening cards one by one.
+          * Then who put the card here and when, to the minute.
           */}
-        {card.createdAt ? (
+        <span className="card-no mono">PRG-{card.number}</span>
+
+        {card.createdAt && (
           <span
             className="card-by"
             title={`${makerName ? t("Created by {name}", { name: makerName }) : t("Created by someone no longer here")} · ${formatExact(card.createdAt, locale)}`}
@@ -124,8 +125,6 @@ export function Card({ state, card, index, columnId, onOpen }: Props) {
               {formatWhen(card.createdAt, t, locale)}
             </time>
           </span>
-        ) : (
-          <span className="card-no mono">PRG-{card.number}</span>
         )}
 
         {card.dueAt && <Due dueAt={card.dueAt} />}

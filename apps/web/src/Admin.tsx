@@ -3,6 +3,7 @@ import { useDialogs } from "./lib/Dialogs.js";
 import { copyToClipboard } from "./lib/clipboard.js";
 import { avatarColor, initials } from "./lib/labels.js";
 import { useT, usePlural, useDateLocale } from "./lib/i18n.js";
+import { useChangePassword } from "./lib/password.js";
 // This sheet rides with the component rather than main.tsx: it is the only thing
 // that wants these rules, and App.tsx already has to import Admin to show it.
 import "./styles.admin.css";
@@ -83,6 +84,7 @@ export function Admin({ meId, onClose, onOpenBoard }: Props) {
   const locale = useDateLocale();
   const [tab, setTab] = useState<Tab>("people");
   const { ask, confirm, tell } = useDialogs();
+  const changeMyPassword = useChangePassword();
 
   const [people, setPeople] = useState<Person[] | null>(null);
   const [invites, setInvites] = useState<Invite[] | null>(null);
@@ -219,6 +221,111 @@ export function Admin({ meId, onClose, onOpenBoard }: Props) {
     });
     if (!ok) return;
     await patchPerson(p, { active: true }, t("{name}'s ban was not lifted", { name: p.name }));
+  };
+
+  /*
+   * Passwords an admin types are typed in the open. Whoever types one has to
+   * hand it over, and a masked field is how a typo gets handed over instead —
+   * and "off" keeps the browser from offering to save it as the admin's own.
+   */
+
+  /** An account ready to sign in to: no link to pass on, nothing to confirm. */
+  const addPerson = async () => {
+    const answer = await ask({
+      title: t("Add someone"),
+      description: t(
+        "They can sign in straight away with this email and password — no link, nothing to confirm. They can change the password later from their account menu.",
+      ),
+      fields: [
+        { name: "name", label: t("Name"), autoComplete: "off" },
+        {
+          name: "email",
+          label: t("Email"),
+          type: "email",
+          placeholder: "them@example.com",
+          autoComplete: "off",
+        },
+        {
+          name: "password",
+          label: t("Password"),
+          autoComplete: "off",
+          minLength: 10,
+          hint: t("At least 10 characters."),
+        },
+        {
+          name: "role",
+          label: t("Role"),
+          type: "select",
+          defaultValue: "member",
+          options: ROLES.map((r) => ({ value: r.value, label: t(ROLE_BLURB[r.value]) })),
+        },
+      ],
+      confirmLabel: t("Create account"),
+    });
+    if (!answer) return;
+    const name = (answer.name ?? "").trim();
+    const email = (answer.email ?? "").trim().toLowerCase();
+    const password = answer.password ?? "";
+
+    const res = await fetch("/api/admin/people", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, email, password, role: answer.role ?? "member" }),
+    });
+    if (!res.ok) {
+      await complain(res, t("That account was not created"));
+      return;
+    }
+    await loadPeople();
+    // A pending invite for the same address was just spent.
+    if (invites) await loadInvites();
+
+    const details = `${location.origin}\n${email}\n${password}`;
+    const copied = await copyToClipboard(details);
+    await tell({
+      title: copied ? t("Sign-in details copied") : t("Copy these sign-in details now"),
+      description: t(
+        "{details}\n\nSend them to {name} however you already talk to them — nothing is emailed, and the password is not shown again.",
+        { details, name },
+      ),
+    });
+  };
+
+  /** The forgotten-password path: there is no email to reset one by. */
+  const setPassword = async (p: Person) => {
+    const answer = await ask({
+      title: t("New password for {name}", { name: p.name }),
+      description: t(
+        "They are signed out on every device and sign in again with this one. Nothing is emailed — tell them yourself.",
+      ),
+      fields: [
+        {
+          name: "password",
+          label: t("New password"),
+          autoComplete: "off",
+          minLength: 10,
+          hint: t("At least 10 characters."),
+        },
+      ],
+      confirmLabel: t("Set password"),
+    });
+    const password = answer?.password;
+    if (!password) return;
+
+    const res = await fetch(`/api/admin/people/${p.id}/password`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      await complain(res, t("{name}'s password was not changed", { name: p.name }));
+      return;
+    }
+    await loadPeople();
+    await tell({
+      title: t("{name}'s password is changed", { name: p.name }),
+      description: t("They were signed out everywhere, and sign in again with the new one."),
+    });
   };
 
   /* -------------------------------------------------------------- boards -- */
@@ -362,12 +469,17 @@ export function Admin({ meId, onClose, onOpenBoard }: Props) {
             <>
               <div className="section-head">
                 <h3>{t("Everyone here")}</h3>
-                {people && (
-                  <span className="muted mono tally">
-                    {people.length}
-                    {deactivated > 0 ? ` · ${t("{count} off", { count: deactivated })}` : ""}
-                  </span>
-                )}
+                <span className="head-tools">
+                  {people && (
+                    <span className="muted mono tally">
+                      {people.length}
+                      {deactivated > 0 ? ` · ${t("{count} off", { count: deactivated })}` : ""}
+                    </span>
+                  )}
+                  <button className="linkish" type="button" onClick={() => void addPerson()}>
+                    {t("Add someone")}
+                  </button>
+                </span>
               </div>
               <p className="muted">
                 {t(
@@ -435,6 +547,19 @@ export function Admin({ meId, onClose, onOpenBoard }: Props) {
                           </option>
                         ))}
                       </select>
+                      {/* Yours is changed the usual way, which asks for the current one. */}
+                      <button
+                        className="linkish"
+                        type="button"
+                        title={
+                          isMe
+                            ? t("Change your password")
+                            : t("New password for {name}", { name: p.name })
+                        }
+                        onClick={() => void (isMe ? changeMyPassword() : setPassword(p))}
+                      >
+                        {t("Password")}
+                      </button>
                       <button
                         className={`linkish${p.active ? " danger" : ""}`}
                         type="button"

@@ -272,6 +272,8 @@ button, select { font: inherit; color: inherit; }
   color: var(--muted);
 }
 .card-no { letter-spacing: 0.02em; }
+/* On the face it is scanned for — "where is PRG-30" — so it holds together and stands out a little. */
+.card-meta .card-no { white-space: nowrap; font-weight: 600; }
 
 /*
  * Who added the card and when. The avatar is a size down from the assignees'
@@ -1029,7 +1031,15 @@ kbd {
   margin: 0;
   line-height: 1.25;
 }
-.dialog-desc { margin: -6px 0 0; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+/* pre-line: a link or sign-in details sit on lines of their own, to be read and copied. */
+.dialog-desc {
+  margin: -6px 0 0;
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
 
 .dialog .field select,
 .dialog .field textarea {
